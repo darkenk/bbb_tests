@@ -17,6 +17,8 @@ include_directories(
     ${DRM_INCLUDE_DIRS}
 )
 
+add_subdirectory(external/dk_utils)
+
 #add_executable(${PROJECT_NAME} main.c)
 add_definitions(-std=c++11)
 add_subdirectory(src)

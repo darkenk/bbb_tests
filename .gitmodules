@@ -1,0 +1,3 @@
+[submodule "external/dk_utils"]
+	path = external/dk_utils
+	url = git@github.com:darkenk/dk_utils.git
