@@ -1,0 +1,5 @@
+find_path(GLM_INCLUDE_DIR NAMES glm/glm.hpp)
+#find_library(OPENGLES2_LIBRARY NAMES GLESv2)
+include(FindPackageHandleStandardArgs)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(GLM DEFAULT_MSG GLM_INCLUDE_DIR)
+mark_as_advanced(GLM_INCLUDE_DIR)

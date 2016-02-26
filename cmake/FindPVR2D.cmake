@@ -1,0 +1,5 @@
+#find_path(OPENGLES2_INCLUDE_DIR NAMES GLES2/gl2.h)
+find_library(PVR2D_LIBRARY NAMES pvr2d)
+include(FindPackageHandleStandardArgs)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(PVR2D DEFAULT_MSG PVR2D_LIBRARY)
+mark_as_advanced(PVR2D_LIBRARY)
