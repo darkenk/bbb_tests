@@ -12,6 +12,8 @@
 #include <unistd.h>
 #include <algorithm>
 
+#include <libkms/libkms.h>
+
 class ModeInfo
 {
 public:
@@ -139,10 +141,84 @@ private:
     }
 };
 
+class KmsBuffer
+{
+public:
+    KmsBuffer(kms_driver* driver, uint32_t width, uint32_t height, uint32_t bpp = 32):
+              mWidth(width), mHeight(height), mBpp(bpp), mDepth(24) {
+        unsigned attribs[] = {
+            KMS_WIDTH,   mWidth,
+            KMS_HEIGHT,  mHeight,
+            KMS_BO_TYPE, KMS_BO_TYPE_SCANOUT_X8R8G8B8,
+            KMS_TERMINATE_PROP_LIST
+        };
+        kms_bo_create(driver, attribs, &mBuffer);
+        kms_bo_get_prop(mBuffer, KMS_PITCH, &mStride);
+        kms_bo_get_prop(mBuffer, KMS_HANDLE, &mHandle);
+        mSize = mStride * mHeight;
+    }
+
+    ~KmsBuffer() {
+        kms_bo_destroy(&mBuffer);
+    }
+
+//    DumbBuffer(DumbBuffer&& o) {
+//        //mObject  = std::move(o.mObject);
+//    }
+//    DumbBuffer& operator=(DumbBuffer&& o) {
+//        //mObject  = std::move(o.mObject);
+//    }
+
+    KmsBuffer(KmsBuffer&) = delete;
+    KmsBuffer& operator=(const KmsBuffer&)  = delete;
+
+    uint32_t getWidth() const {
+        return mWidth;
+    }
+
+    uint32_t getHeight() const {
+        return mHeight;
+    }
+
+    uint32_t getHandle() const {
+        return mHandle;
+    }
+
+    uint32_t getStride() const {
+        return mStride;
+    }
+
+    uint8_t getDepth() const {
+        return mDepth;
+    }
+
+    uint8_t getBpp() const {
+        return mBpp;
+    }
+
+    void clear(uint8_t color) {
+        kms_bo_map(mBuffer, (void**)&mMappedBuffer);
+        memset(mMappedBuffer, color, mSize);
+        kms_bo_unmap(mBuffer);
+    }
+
+private:
+    kms_bo* mBuffer;
+
+    uint8_t* mMappedBuffer;
+    uint32_t mWidth;
+    uint32_t mHeight;
+    uint32_t mHandle;
+    uint64_t mSize;
+    uint32_t mStride;
+    uint8_t mDepth;
+    uint8_t mBpp;
+};
+
 class Framebuffer
 {
 public:
-    Framebuffer(int fd, DumbBuffer* buffer) {
+    Framebuffer(int fd, KmsBuffer* buffer) {
         mFd = fd;
         mBuffer = buffer;
         auto ret = drmModeAddFB(mFd, buffer->getWidth(), buffer->getHeight(), buffer->getDepth(),
@@ -176,7 +252,7 @@ public:
 
 private:
     int mFd;
-    DumbBuffer* mBuffer;
+    KmsBuffer* mBuffer;
     uint32_t mFb;
 };
 
@@ -429,8 +505,13 @@ int main()
     auto e = c.getEncoder();
     auto crtc = e.getCrtc();
 
-    DumbBuffer d(fd, 800, 480);
-    DumbBuffer d2(fd, 800, 480);
+    struct kms_driver* driver;
+    kms_create(fd, &driver);
+
+
+
+    KmsBuffer d(driver, 800, 480);
+    KmsBuffer d2(driver, 800, 480);
     Framebuffer fb(fd, &d);
     Framebuffer fb2(fd, &d);
     crtc.setup(fb, c.getId(), c.getDefaulModeInfo());
@@ -446,7 +527,7 @@ int main()
     ctx.version = DRM_EVENT_CONTEXT_VERSION;
     ctx.vblank_handler = nullptr;
     ctx.page_flip_handler = pageFlipHandler;
-    for (auto i = 0; i < 256; i++) {
+    for (auto i = 0; i < 10256; i++) {
         struct timeval timeout = { .tv_sec = 3, .tv_usec = 0 };
         fd_set fds;
         int ret;
@@ -457,6 +538,6 @@ int main()
         ret = select(fd + 1, &fds, NULL, NULL, &timeout);
         drmHandleEvent(fd, &ctx);
     }
-
+    kms_destroy(&driver);
     drmClose(fd);
 }

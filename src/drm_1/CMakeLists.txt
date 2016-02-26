@@ -8,9 +8,10 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(DRM REQUIRED)
-
+find_package(KMS REQUIRED)
 include_directories(
     ${DRM_INCLUDE_DIR}
+    ${KMS_INCLUDE_DIR}
 )
 
 add_definitions(
@@ -21,4 +22,5 @@ add_executable(${PROJECT_NAME} main.cpp)
 
 target_link_libraries(${PROJECT_NAME}
     ${DRM_LIBRARIES}
+    ${KMS_LIBRARIES}
 )
