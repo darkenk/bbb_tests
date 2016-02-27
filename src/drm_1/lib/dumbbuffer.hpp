@@ -18,11 +18,13 @@ public:
 
     virtual void clear(uint8_t color);
 
+    virtual uint8_t* map();
+
 private:
     int mFd;
     uint8_t* mMappedBuffer;
 
-    void map();
+    void map2();
 };
 
 #endif // DUMBBUFFER_HPP

@@ -12,6 +12,7 @@ public:
     virtual ~KmsBuffer();
 
     void clear(uint8_t color);
+    virtual uint8_t* map() { return nullptr; }
 
 private:
     kms_bo* mBuffer;

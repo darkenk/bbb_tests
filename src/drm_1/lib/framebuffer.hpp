@@ -19,6 +19,7 @@ public:
     uint32_t getId();
 
     void clear(uint8_t color);
+    Buffer* getBuffer();
 
 private:
     int mFd;

@@ -18,6 +18,7 @@ public:
     uint8_t getBpp() const;
 
     virtual void clear(uint8_t color) = 0;
+    virtual uint8_t* map() = 0;
 
 protected:
     uint32_t mWidth;

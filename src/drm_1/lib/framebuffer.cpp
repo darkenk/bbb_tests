@@ -22,3 +22,8 @@ uint32_t Framebuffer::getId() {
 void Framebuffer::clear(uint8_t color) {
     mBuffer->clear(color);
 }
+
+Buffer* Framebuffer::getBuffer()
+{
+    return mBuffer;
+}

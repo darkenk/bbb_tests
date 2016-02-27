@@ -17,7 +17,7 @@ DumbBuffer::DumbBuffer(int fd, uint32_t width, uint32_t height):
     mHandle = creq.handle;
     mSize = creq.size;
     mStride = creq.pitch;
-    map();
+    map2();
 }
 
 DumbBuffer::~DumbBuffer()
@@ -33,7 +33,12 @@ void DumbBuffer::clear(uint8_t color)
     memset(mMappedBuffer, color, mSize);
 }
 
-void DumbBuffer::map()
+uint8_t* DumbBuffer::map()
+{
+    return mMappedBuffer;
+}
+
+void DumbBuffer::map2()
 {
     drm_mode_map_dumb mreq;
     memset(&mreq, 0, sizeof(mreq));
@@ -44,4 +49,5 @@ void DumbBuffer::map()
     }
     mMappedBuffer = static_cast<uint8_t*>(mmap(0, mSize, PROT_READ | PROT_WRITE, MAP_SHARED, mFd,
                                                mreq.offset));
+    clear(0xFF);
 }
