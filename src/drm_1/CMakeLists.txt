@@ -16,8 +16,8 @@ add_definitions(
     -std=gnu++11
 )
 
-add_executable(${PROJECT_NAME} main_pvr2d.cpp)
-#add_executable(${PROJECT_NAME} main.cpp)
+#add_executable(${PROJECT_NAME} main_pvr2d.cpp)
+add_executable(${PROJECT_NAME} main.cpp)
 
 target_link_libraries(${PROJECT_NAME}
     ${DRM_LIBRARIES}

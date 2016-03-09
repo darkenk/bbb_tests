@@ -19,6 +19,7 @@ public:
 
     virtual void clear(uint8_t color) = 0;
     virtual uint8_t* map() = 0;
+    virtual void unmap() {}
 
 protected:
     uint32_t mWidth;
