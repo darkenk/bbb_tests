@@ -8,11 +8,11 @@ find_package(KMS REQUIRED)
 find_package(GBM REQUIRED)
 find_package(UDEV REQUIRED)
 find_package(EGL REQUIRED)
-find_package(GLES REQUIRED)
+find_package(GLESv2 REQUIRED)
 include_directories(
     ${DRM_INCLUDE_DIR}
     ${KMS_INCLUDE_DIR}
-    ${GBM_INCLUDE_DIR}
+    ${GBM_INCLUDE_DIRS}
     ${DK_UTILS_INCLUDE_DIRS}
     ${EGL_INCLUDE_DIRS}
 )
@@ -21,7 +21,7 @@ add_definitions(
     -std=gnu++11
 )
 
-add_executable(${PROJECT_NAME} main.cpp ../../external/dk_utils/src/dk_opengl/eglwrapper.cpp)
+add_executable(${PROJECT_NAME} main.cpp)
 
 target_link_libraries(${PROJECT_NAME}
     ${GBM_LIBRARIES}
@@ -32,5 +32,5 @@ target_link_libraries(${PROJECT_NAME}
     drm_wrapper
     ${CMAKE_DL_LIBS}
     ${EGL_LIBRARIES}
-    ${OPENGLES2_LIBRARY}
+    ${GLESv2_LIBRARIES}
 )

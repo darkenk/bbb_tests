@@ -1,5 +1,5 @@
 project(bbb_tests)
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.12)
 aux_source_directory(. SRC_LIST)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -11,13 +11,13 @@ set(CMAKE_MODULE_PATH
     ${CMAKE_MODULE_PATH}
     ${CMAKE_SOURCE_DIR}/cmake
 )
+set(ENABLE_TESTS OFF CACHE BOOL "Disable dk_utils tests" FORCE)
+find_package(dk_utils REQUIRED)
 find_package(DRM REQUIRED)
 
 include_directories(
     ${DRM_INCLUDE_DIRS}
 )
-
-add_subdirectory(external/dk_utils)
 
 #add_executable(${PROJECT_NAME} main.c)
 add_definitions(-std=c++11)

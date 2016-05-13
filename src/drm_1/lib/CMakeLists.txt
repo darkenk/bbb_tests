@@ -2,10 +2,12 @@ project(drm_wrapper)
 
 find_package(DRM REQUIRED)
 find_package(KMS REQUIRED)
+find_package(GBM REQUIRED)
 
 include_directories(
-    ${DRM_INCLUDE_DIR}
-    ${KMS_INCLUDE_DIR}
+    ${DRM_INCLUDE_DIRS}
+    ${KMS_INCLUDE_DIRS}
+    ${GBM_INCLUDE_DIRS}
     ${DK_UTILS_INCLUDE_DIRS}
     ../xf86drm
 )

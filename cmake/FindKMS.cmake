@@ -1,5 +1,0 @@
-find_path(KMS_INCLUDE_DIR NAMES libkms/libkms.h)
-find_library(KMS_LIBRARIES NAMES kms)
-include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(KMS DEFAULT_MSG KMS_INCLUDE_DIR KMS_LIBRARIES)
-mark_as_advanced(KMS_INCLUDE_DIR KMS_LIBRARIES)

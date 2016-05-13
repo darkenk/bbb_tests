@@ -109,8 +109,9 @@ public:
         mHeight = buffer.height;
         mWidth = buffer.width;
         mStride = buffer.stride / 4;
-        mBuffers[0] = new WSBuffer(ctx, surface->bo[0]);
-        mBuffers[1] = new WSBuffer(ctx, surface->bo[1]);
+        for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
+            mBuffers[i] = new WSBuffer(ctx, surface->bo[i]);
+        }
         surface->front = 0;
     }
     ~WSWindow() {

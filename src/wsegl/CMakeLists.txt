@@ -8,7 +8,7 @@ find_package(KMS REQUIRED)
 
 include_directories(SYSTEM
     ./sgx_include
-    ${GBM_INCLUDE_DIR}
+    ${GBM_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../thayama/libgbm
     ${KMS_INCLUDE_DIR}/libkms
     ${DK_UTILS_INCLUDE_DIRS}
