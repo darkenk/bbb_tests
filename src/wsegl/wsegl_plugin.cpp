@@ -308,7 +308,7 @@ static WSEGL_FunctionTable gFunctionTable =
     .pfnWSEGL_FlagStartFrame = FlagStartFrame
 };
 
-const WSEGL_FunctionTable* WSEGL_GetFunctionTablePointer(void)
+PVR2D_EXPORT const WSEGL_FunctionTable* WSEGL_GetFunctionTablePointer(void)
 {
     return &gFunctionTable;
 }

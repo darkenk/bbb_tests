@@ -14,15 +14,16 @@ include_directories(SYSTEM
     ${DK_UTILS_INCLUDE_DIRS}
 )
 
-add_definitions(-std=c++11)
+add_definitions(-std=c++11
+    -fvisibility=hidden)
 
 add_library(${PROJECT_NAME} SHARED ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME}
-    ${PVR2D_LIBRARY}
-    ${GBM_LIBRARY}
+    ${PVR2D_LIBRARIES}
+    ${GBM_LIBRARIES}
 )
 
 aux_source_directory(wrapper SRC_LIST2)
 add_library(wsegl_wrapper SHARED ${SRC_LIST2})
-target_link_libraries(wsegl_wrapper ${PVR2D_LIBRARY})
+target_link_libraries(wsegl_wrapper ${PVR2D_LIBRARIES})
 
