@@ -12,6 +12,8 @@ include_directories(
     ../xf86drm
 )
 
+message(STATUS DRM:${DRM_INCLUDE_DIRS})
+
 add_definitions(
     -std=gnu++11
 )

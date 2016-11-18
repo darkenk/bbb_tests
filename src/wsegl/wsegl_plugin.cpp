@@ -11,14 +11,18 @@
 #include "gbm_kmsint.h"
 #include <cstring>
 
-using namespace std;
+#include <wayland-egl.h>
+#include "waylandwindow.hpp"
 
+using namespace std;
 
 static WSEGLCaps const wseglDisplayCaps[] = {
     {WSEGL_CAP_WINDOWS_USE_HW_SYNC, 1},
     {WSEGL_CAP_PIXMAPS_USE_HW_SYNC, 1},
     {WSEGL_NO_CAPS, 0}
 };
+
+static bool sIsWayland = false;
 
 class WSDisplay : NonCopyable
 {
@@ -157,21 +161,29 @@ WSEGLError IsDisplayValid(NativeDisplayType disp)
 {
     fprintf(stderr, "DK_%s 0x%x\n", __FUNCTION__, disp);
     void* head = *reinterpret_cast<void**>(disp);
-    if (head == reinterpret_cast<void*>(gbm_create_device)) {
+    sIsWayland = (head == reinterpret_cast<const void*>(&wl_display_interface));
+    if (sIsWayland || head == reinterpret_cast<void*>(gbm_create_device)) {
+        fprintf(stderr, "Valid display\n");
         return WSEGL_SUCCESS;
     } else {
+        fprintf(stderr, "InValid display\n");
         return WSEGL_BAD_NATIVE_DISPLAY;
     }
 }
 
-WSEGLError InitialiseDisplay(NativeDisplayType, WSEGLDisplayHandle* display, const WSEGLCaps** caps,
+WSEGLError InitialiseDisplay(NativeDisplayType disp, WSEGLDisplayHandle* display, const WSEGLCaps** caps,
                              WSEGLConfig** config)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    auto d = new WSDisplay;
-    *display = reinterpret_cast<WSEGLDisplayHandle>(d);
-    *caps = wseglDisplayCaps;
-    *config = d->getConfigs();
+    if (false && sIsWayland) {
+        auto d = new WaylandDisplay(reinterpret_cast<wl_display*>(disp));
+        return WSEGL_BAD_NATIVE_DISPLAY;
+    } else {
+        auto d = new WSDisplay;
+        *display = reinterpret_cast<WSEGLDisplayHandle>(d);
+        *caps = wseglDisplayCaps;
+        *config = d->getConfigs();
+    }
     return WSEGL_SUCCESS;
 }
 
@@ -182,16 +194,28 @@ WSEGLError CloseDisplay(WSEGLDisplayHandle display)
     return WSEGL_SUCCESS;
 }
 
-WSEGLError CreateWindowDrawable(WSEGLDisplayHandle display, WSEGLConfig *,
+WSEGLError CreateWindowDrawable(WSEGLDisplayHandle display, WSEGLConfig * config,
                                 WSEGLDrawableHandle* drawable, NativeWindowType window,
                                 WSEGLRotationAngle* rotation)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
     auto d = WSDisplay::getFromWSEGL(display);
-    auto s = reinterpret_cast<struct gbm_kms_surface*>(window);
+    if (sIsWayland) {
 
-    auto w = new WSWindow(d->getContext(), s);
-    *drawable = w;
+        if (config == NULL || !(config->ui32DrawableType & WSEGL_DRAWABLE_WINDOW)) {
+            fprintf(stderr, "selected config does not support window drawables");
+            return WSEGL_BAD_CONFIG;
+        }
+        fprintf(stderr, "Pixel Format 0x%x", config->ePixelFormat);
+        auto w = new WSWaylandWindow(d->getContext(), window);
+        *drawable = w;
+    } else {
+        auto s = reinterpret_cast<struct gbm_kms_surface*>(window);
+        fprintf(stderr, "DK %dx%d", s->base.width, s->base.height);
+
+        auto w = new WSWindow(d->getContext(), s);
+        *drawable = w;
+    }
     *rotation = WSEGL_ROTATE_0;
     return WSEGL_SUCCESS;
 }
@@ -212,7 +236,11 @@ WSEGLError DeleteDrawable(WSEGLDrawableHandle drawable)
 WSEGLError SwapDrawable(WSEGLDrawableHandle window, unsigned long)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    WSWindow::getFromWSEGL(window)->swapBuffers();
+    if (sIsWayland) {
+        WSWaylandWindow::getFromWSEGL(window)->swapBuffers();
+    } else {
+        WSWindow::getFromWSEGL(window)->swapBuffers();
+    }
     return WSEGL_SUCCESS;
 }
 
@@ -244,26 +272,39 @@ WSEGLError GetDrawableParameters(WSEGLDrawableHandle drawable, WSEGLDrawablePara
                                  WSEGLDrawableParams* renderParams, unsigned long flags)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    auto w = WSWindow::getFromWSEGL(drawable);
     memset(sourceParams, 0, sizeof (WSEGLDrawableParams));
     memset(renderParams, 0, sizeof (WSEGLDrawableParams));
-    sourceParams->ui32Width = w->getWidth();
-    sourceParams->ui32Height = w->getHeight();
-    sourceParams->ui32Stride = w->getStride();
-    sourceParams->ePixelFormat = w->getFormat();
-    auto memInfo = w->getFrontBuffer()->getMemInfo();
-    sourceParams->pvLinearAddress = memInfo->pBase;
-    sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
-    sourceParams->ulFlags = memInfo->ulFlags;
+    if (sIsWayland) {
+        auto w = WSWaylandWindow::getFromWSEGL(drawable);
+        renderParams->ui32Width = sourceParams->ui32Width = w->getWidth();
+        renderParams->ui32Height = sourceParams->ui32Height = w->getHeight();
+        renderParams->ui32Stride = sourceParams->ui32Stride = w->getStride();
+        renderParams->ePixelFormat = sourceParams->ePixelFormat = w->getFormat();
+        auto memInfo = w->getFrontBuffer()->getMemInfo();
+        sourceParams->pvLinearAddress = memInfo->pBase;
+        sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
+        sourceParams->ulFlags = memInfo->ulFlags;
 
-    renderParams->ui32Width = w->getWidth();
-    renderParams->ui32Height = w->getHeight();
-    renderParams->ui32Stride = w->getStride();
-    renderParams->ePixelFormat = w->getFormat();
-    memInfo = w->getBackBuffer()->getMemInfo();
-    renderParams->pvLinearAddress = memInfo->pBase;
-    renderParams->ui32HWAddress = memInfo->ui32DevAddr;
-    renderParams->ulFlags = memInfo->ulFlags;
+        memInfo = w->getBackBuffer()->getMemInfo();
+        renderParams->pvLinearAddress = memInfo->pBase;
+        renderParams->ui32HWAddress = memInfo->ui32DevAddr;
+        renderParams->ulFlags = memInfo->ulFlags;
+    } else {
+        auto w = WSWindow::getFromWSEGL(drawable);
+        renderParams->ui32Width = sourceParams->ui32Width = w->getWidth();
+        renderParams->ui32Height = sourceParams->ui32Height = w->getHeight();
+        renderParams->ui32Stride = sourceParams->ui32Stride = w->getStride();
+        renderParams->ePixelFormat = sourceParams->ePixelFormat = w->getFormat();
+        auto memInfo = w->getFrontBuffer()->getMemInfo();
+        sourceParams->pvLinearAddress = memInfo->pBase;
+        sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
+        sourceParams->ulFlags = memInfo->ulFlags;
+
+        memInfo = w->getBackBuffer()->getMemInfo();
+        renderParams->pvLinearAddress = memInfo->pBase;
+        renderParams->ui32HWAddress = memInfo->ui32DevAddr;
+        renderParams->ulFlags = memInfo->ulFlags;
+    }
     return WSEGL_SUCCESS;
 }
 

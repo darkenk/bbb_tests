@@ -32,7 +32,7 @@ void vblankHandler(int fd, unsigned int sequence,  unsigned int sec, unsigned in
 
 void pageFlipHandler(int fd, unsigned int frame, unsigned int sec, unsigned int usec, void *data)
 {
-    LOGVE("%d,%d", sec, usec);
+//    LOGVE("%d,%d", sec, usec);
     auto ctx = static_cast<PageFlipCtx*>(data);
 
     // does it really needed?

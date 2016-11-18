@@ -4,8 +4,8 @@ find_package(DRM REQUIRED)
 find_package(KMS REQUIRED)
 find_package(PVR2D REQUIRED)
 include_directories(
-    ${DRM_INCLUDE_DIR}
-    ${KMS_INCLUDE_DIR}
+    ${DRM_INCLUDE_DIRS}
+    ${KMS_INCLUDE_DIRS}
     ${PVR2D_INCLUDE_DIR}
     ${DK_UTILS_INCLUDE_DIRS}
 )

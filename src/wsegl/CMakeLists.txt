@@ -5,6 +5,7 @@ aux_source_directory(. SRC_LIST)
 find_package(PVR2D REQUIRED)
 find_package(GBM REQUIRED)
 find_package(KMS REQUIRED)
+find_package(Wayland COMPONENTS Egl Client)
 
 include_directories(SYSTEM
     ./sgx_include
@@ -12,6 +13,7 @@ include_directories(SYSTEM
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../thayama/libgbm
     ${KMS_INCLUDE_DIR}/libkms
     ${DK_UTILS_INCLUDE_DIRS}
+    ${Wayland_INCLUDE_DIRS}
 )
 
 add_definitions(-std=c++11

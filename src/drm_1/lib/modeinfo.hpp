@@ -2,9 +2,9 @@
 #define MODEINFO_HPP
 
 #define virtual myvirtual
+#include <drm.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <drm.h>
 #undef virtual
 
 #include "dk_utils/noncopyable.hpp"

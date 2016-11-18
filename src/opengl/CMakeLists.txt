@@ -10,11 +10,12 @@ find_package(UDEV REQUIRED)
 find_package(EGL REQUIRED)
 find_package(GLESv2 REQUIRED)
 include_directories(
-    ${DRM_INCLUDE_DIR}
-    ${KMS_INCLUDE_DIR}
+    ${DRM_INCLUDE_DIRS}
+    ${KMS_INCLUDE_DIRS}
     ${GBM_INCLUDE_DIRS}
     ${DK_UTILS_INCLUDE_DIRS}
     ${EGL_INCLUDE_DIRS}
+    ${GLESv2_INCLUDE_DIRS}
 )
 
 add_definitions(

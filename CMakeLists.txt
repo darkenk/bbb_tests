@@ -7,10 +7,13 @@ if(NOT CMAKE_BUILD_TYPE)
     "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif()
 
+find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH
     ${CMAKE_MODULE_PATH}
     ${CMAKE_SOURCE_DIR}/cmake
+    ${ECM_FIND_MODULE_DIR}
 )
+
 set(ENABLE_TESTS OFF CACHE BOOL "Disable dk_utils tests" FORCE)
 find_package(dk_utils REQUIRED)
 find_package(DRM REQUIRED)
