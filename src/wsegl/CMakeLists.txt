@@ -23,6 +23,7 @@ add_library(${PROJECT_NAME} SHARED ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME}
     ${PVR2D_LIBRARIES}
     ${GBM_LIBRARIES}
+    ${KMS_LIBRARIES}
 )
 
 aux_source_directory(wrapper SRC_LIST2)

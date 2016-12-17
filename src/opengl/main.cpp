@@ -61,10 +61,10 @@ int main()
     auto surface = gbm_surface_create(gbmDevice, 800, 480, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT |
                                       GBM_BO_USE_RENDERING);
     assert(surface);
-    EGLWrapper w((EGLNativeDisplayType)gbmDevice, (EGLNativeWindowType)surface);
+    //EGLWrapper w((EGLNativeDisplayType)gbmDevice, (EGLNativeWindowType)surface);
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    w.swap();
+    //w.swap();
 
     Resources r(fd);
     auto c = r.getDefaultConnector();
@@ -90,7 +90,7 @@ int main()
 
     for (auto i = 0; i < 10256; i++) {
         glClear(GL_COLOR_BUFFER_BIT);
-        w.swap();
+      //  w.swap();
 
         struct timeval timeout = { .tv_sec = 3, .tv_usec = 0 };
         fd_set fds;

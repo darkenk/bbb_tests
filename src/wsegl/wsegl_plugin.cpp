@@ -24,10 +24,10 @@ static WSEGLCaps const wseglDisplayCaps[] = {
 
 static bool sIsWayland = false;
 
-class WSDisplay : NonCopyable
+class WSDisplayGBM : NonCopyable
 {
 public:
-    WSDisplay() {
+    WSDisplayGBM() {
         int deviceCount = PVR2DEnumerateDevices(0);
         vector<PVR2DDEVICEINFO> devices(deviceCount);
         PVR2DEnumerateDevices(&devices[0]);
@@ -41,6 +41,7 @@ public:
         if (ret != PVR2D_OK) {
             fprintf(stderr, "Cannot create device context\n");
         }
+        fprintf(stderr, "DK_%s Context created 0x%x\n", __FUNCTION__, mContext);
 
         mConfigs[0].ui32DrawableType = WSEGL_DRAWABLE_WINDOW;
         mConfigs[0].ePixelFormat = WSEGL_PIXELFORMAT_8888;
@@ -53,15 +54,15 @@ public:
         mConfigs[0].ulFramebufferTarget = WSEGL_TRUE;
     }
 
-    ~WSDisplay() {
+    ~WSDisplayGBM() {
         auto ret = PVR2DDestroyDeviceContext(mContext);
         if (ret != PVR2D_OK) {
             fprintf(stderr, "Cannot destroy device context\n");
         }
     }
 
-    static WSDisplay* getFromWSEGL(WSEGLDisplayHandle handle) {
-        return reinterpret_cast<WSDisplay*>(handle);
+    static WSDisplayGBM* getFromWSEGL(WSEGLDisplayHandle handle) {
+        return reinterpret_cast<WSDisplayGBM*>(handle);
     }
 
     WSEGLConfig* getConfigs() {
@@ -175,11 +176,13 @@ WSEGLError InitialiseDisplay(NativeDisplayType disp, WSEGLDisplayHandle* display
                              WSEGLConfig** config)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    if (false && sIsWayland) {
+    if (true && sIsWayland) {
         auto d = new WaylandDisplay(reinterpret_cast<wl_display*>(disp));
-        return WSEGL_BAD_NATIVE_DISPLAY;
+        *display = reinterpret_cast<WSEGLDisplayHandle>(d);
+        *caps = wseglDisplayCaps;
+        *config = d->getConfigs();
     } else {
-        auto d = new WSDisplay;
+        auto d = new WSDisplayGBM;
         *display = reinterpret_cast<WSEGLDisplayHandle>(d);
         *caps = wseglDisplayCaps;
         *config = d->getConfigs();
@@ -190,7 +193,11 @@ WSEGLError InitialiseDisplay(NativeDisplayType disp, WSEGLDisplayHandle* display
 WSEGLError CloseDisplay(WSEGLDisplayHandle display)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    delete WSDisplay::getFromWSEGL(display);
+    if (sIsWayland) {
+        delete WaylandDisplay::getFromWSEGL(display);
+    } else {
+        delete WSDisplayGBM::getFromWSEGL(display);
+    }
     return WSEGL_SUCCESS;
 }
 
@@ -199,17 +206,18 @@ WSEGLError CreateWindowDrawable(WSEGLDisplayHandle display, WSEGLConfig * config
                                 WSEGLRotationAngle* rotation)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    auto d = WSDisplay::getFromWSEGL(display);
-    if (sIsWayland) {
 
+    if (sIsWayland) {
         if (config == NULL || !(config->ui32DrawableType & WSEGL_DRAWABLE_WINDOW)) {
             fprintf(stderr, "selected config does not support window drawables");
             return WSEGL_BAD_CONFIG;
         }
+        auto d = WaylandDisplay::getFromWSEGL(display);
         fprintf(stderr, "Pixel Format 0x%x", config->ePixelFormat);
-        auto w = new WSWaylandWindow(d->getContext(), window);
+        auto w = new WSWaylandWindow(d, window);
         *drawable = w;
     } else {
+        auto d = WSDisplayGBM::getFromWSEGL(display);
         auto s = reinterpret_cast<struct gbm_kms_surface*>(window);
         fprintf(stderr, "DK %dx%d", s->base.width, s->base.height);
 
@@ -229,7 +237,11 @@ WSEGLError CreatePixmapDrawable(WSEGLDisplayHandle, WSEGLConfig *, WSEGLDrawable
 WSEGLError DeleteDrawable(WSEGLDrawableHandle drawable)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    delete WSWindow::getFromWSEGL(drawable);
+    if (sIsWayland) {
+        delete WSWaylandWindow::getFromWSEGL(drawable);
+    } else {
+        delete WSWindow::getFromWSEGL(drawable);
+    }
     return WSEGL_SUCCESS;
 }
 
@@ -305,6 +317,9 @@ WSEGLError GetDrawableParameters(WSEGLDrawableHandle drawable, WSEGLDrawablePara
         renderParams->ui32HWAddress = memInfo->ui32DevAddr;
         renderParams->ulFlags = memInfo->ulFlags;
     }
+    fprintf(stderr, "Render 0x%x, 0x%lx, Source 0x%x 0x%lx", renderParams->pvLinearAddress,
+            renderParams->ui32HWAddress, sourceParams->pvLinearAddress,
+            sourceParams->ui32HWAddress);
     return WSEGL_SUCCESS;
 }
 

@@ -6,9 +6,14 @@ set(CMAKE_SYSTEM_VERSION 1)
 set(CMAKE_LIBRARY_ARCHITECTURE arm-linux-gnueabihf)
 
 # specify the cross compiler
-set(CMAKE_C_COMPILER ${CMAKE_CURRENT_LIST_DIR}/bb-kernel/dl/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf/bin/${CMAKE_LIBRARY_ARCHITECTURE}-gcc)
-set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_LIST_DIR}/bb-kernel/dl/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf/bin/${CMAKE_LIBRARY_ARCHITECTURE}-g++)
+#set(CMAKE_C_COMPILER ${CMAKE_CURRENT_LIST_DIR}/bb-kernel/dl/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf/bin/${CMAKE_LIBRARY_ARCHITECTURE}-gcc)
+#set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_LIST_DIR}/bb-kernel/dl/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf/bin/${CMAKE_LIBRARY_ARCHITECTURE}-g++)
+#set(CMAKE_C_COMPILER ${CMAKE_LIBRARY_ARCHITECTURE}-gcc)
+#set(CMAKE_CXX_COMPILER ${CMAKE_LIBRARY_ARCHITECTURE}-g++)
+set(CMAKE_C_COMPILER /home/darkenk/bin/gcc-linaro-4.9-2016.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc)
+set(CMAKE_CXX_COMPILER /home/darkenk/bin/gcc-linaro-4.9-2016.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-g++)
 set(CMAKE_SYSROOT ${CMAKE_CURRENT_LIST_DIR}/rootfs/)
+
 set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath-link,${CMAKE_SYSROOT}/lib/${CMAKE_LIBRARY_ARCHITECTURE}:${CMAKE_SYSROOT}/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}")
 set(CMAKE_MODULE_LINKER_FLAGS "-Wl,-rpath-link,${CMAKE_SYSROOT}/lib/${CMAKE_LIBRARY_ARCHITECTURE}:${CMAKE_SYSROOT}/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}")
 
