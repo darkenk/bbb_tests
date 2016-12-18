@@ -7,8 +7,10 @@
 #include <cstdio>
 #include "wsegl_plugin.hpp"
 #include <array>
+extern "C" {
 #include <wayland-kms.h>
 #include <wayland-kms-client-protocol.h>
+}
 #include <libkms/libkms.h>
 #include "wsdisplay.hpp"
 #include "../drm_1/lib/resources.hpp"
@@ -122,6 +124,10 @@ public:
         return mMemInfo;
     }
 
+    wl_buffer* getWaylandBuffer() {
+        return mWaylandBuffer;
+    }
+
 private:
     PVR2DCONTEXTHANDLE mContext;
     PVR2DMEMINFO* mMemInfo;
@@ -146,6 +152,7 @@ public:
         mWidth = w->width;
         mStride = w->width;
         mIndex = 0;
+        mSurface = w->surface;
         for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
             mBuffers[i] = new WSWaylandBuffer(display, w);
         }
@@ -175,6 +182,8 @@ public:
 
     void swapBuffers() {
         //PVR2DQueryBlitsComplete(mContext, getBackBuffer()->getMemInfo(), 1);
+        wl_surface_attach(mSurface, getFrontBuffer()->getWaylandBuffer(), 0, 0);
+        wl_surface_commit(mSurface);
         mIndex = (mIndex + 1) % BUFFER_COUNT;
         fprintf(stderr, "Current buffer %d\n", mIndex);
     }
@@ -188,6 +197,7 @@ private:
     unsigned long mStride;
     WSEGLPixelFormat mFormat;
     std::array<WSWaylandBuffer*, BUFFER_COUNT> mBuffers;
+    wl_surface* mSurface;
 };
 
 
