@@ -7,6 +7,7 @@
 #include <gbm/gbm.h>
 #include <cassert>
 #include <dk_utils/noncopyable.hpp>
+#include <dk_utils/logger.hpp>
 
 #include "gbm_kmsint.h"
 #include <cstring>
@@ -14,6 +15,7 @@
 #include <wayland-egl.h>
 #include "waylandwindow.hpp"
 #include <sys/mman.h>
+#include "gbmdrawable.hpp"
 
 using namespace std;
 
@@ -79,7 +81,7 @@ private:
     WSEGLConfig mConfigs[1];
 };
 
-class WSBuffer : NonCopyable
+class WSBuffer : public WSEGL::Buffer
 {
 public:
     WSBuffer(PVR2DCONTEXTHANDLE ctx, gbm_kms_bo* buffer): mContext(ctx), mBuffer(buffer) {
@@ -88,39 +90,35 @@ public:
                 fprintf(stderr, "Mapping failed\n");
             }
         }
-        PVR2DMemWrap(mContext, buffer->addr, 0, buffer->size, NULL, &mMemInfo);
+        PVR2DMemWrap(mContext, buffer->addr, PVR2D_WRAPFLAG_CONTIGUOUS, buffer->size, NULL, &mMemInfo);
     }
 
     ~WSBuffer() {
         PVR2DMemFree(mContext, mMemInfo);
     }
 
-    PVR2DMEMINFO* getMemInfo() {
-        return mMemInfo;
-    }
-
 private:
     PVR2DCONTEXTHANDLE mContext;
     gbm_kms_bo* mBuffer;
-    PVR2DMEMINFO* mMemInfo;
 };
 
-class WSWindow : NonCopyable
+class WSWindow : public WSEGL::Drawable
 {
 public:
     WSWindow(PVR2DCONTEXTHANDLE ctx, struct gbm_kms_surface* surface):
-        mContext(ctx), mSurface(surface) {
-        mFormat = WSEGL_PIXELFORMAT_ABGR8888;
-        auto& buffer = surface->bo[0]->base;
-        mHeight = buffer.height;
-        mWidth = buffer.width;
-        mStride = buffer.stride / 4;
+        Drawable(ctx,
+            surface->bo[0]->base.width,
+            surface->bo[0]->base.height,
+            surface->bo[0]->base.stride / 4,
+            WSEGL_PIXELFORMAT_ABGR8888
+        ),
+        mSurface(surface) {
         for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
             mBuffers[i] = new WSBuffer(ctx, surface->bo[i]);
         }
         surface->front = 0;
     }
-    ~WSWindow() {
+    virtual ~WSWindow() {
         for (auto b : mBuffers) {
             delete b;
         }
@@ -130,33 +128,13 @@ public:
         return reinterpret_cast<WSWindow*>(handle);
     }
 
-    unsigned long getWidth() const;
-    unsigned long getHeight() const;
-    unsigned long getStride() const;
-    WSEGLPixelFormat getFormat() const;
-
-    WSBuffer* getFrontBuffer() {
-        return mBuffers[mSurface->front];
-    }
-
-    WSBuffer* getBackBuffer() {
-        return mBuffers[(mSurface->front - 1) % BUFFER_COUNT];
-    }
-
     void swapBuffers() {
-        mSurface->front = (mSurface->front + 1) % BUFFER_COUNT;
-        fprintf(stderr, "Current buffer %d\n", mSurface->front);
+        WSEGL::Drawable::swapBuffers();
+        mSurface->front = getIndex();
     }
 
 private:
-    static constexpr size_t BUFFER_COUNT = 2;
-    PVR2DCONTEXTHANDLE mContext;
     struct gbm_kms_surface* mSurface;
-    unsigned long mWidth;
-    unsigned long mHeight;
-    unsigned long mStride;
-    WSEGLPixelFormat mFormat;
-    std::array<WSBuffer*, BUFFER_COUNT> mBuffers;
 };
 
 WSEGLError IsDisplayValid(NativeDisplayType disp)
@@ -220,7 +198,7 @@ WSEGLError CreateWindowDrawable(WSEGLDisplayHandle display, WSEGLConfig * config
     } else {
         auto d = WSDisplayGBM::getFromWSEGL(display);
         auto s = reinterpret_cast<struct gbm_kms_surface*>(window);
-        fprintf(stderr, "DK %dx%d", s->base.width, s->base.height);
+        fprintf(stderr, "DK %dx%d\n", s->base.width, s->base.height);
 
         auto w = new WSWindow(d->getContext(), s);
         *drawable = w;
@@ -229,56 +207,18 @@ WSEGLError CreateWindowDrawable(WSEGLDisplayHandle display, WSEGLConfig * config
     return WSEGL_SUCCESS;
 }
 
-struct wl_kms {
-	struct wl_display *display;
-	int fd;				/* FD for DRM */
-	char *device_name;
-
-	struct kms_auth *auth;		/* for nested authentication */
-};
-
-PVR2DMEMINFO* memInfo;
-
-WSEGLError CreatePixmapDrawable(WSEGLDisplayHandle display, WSEGLConfig *, WSEGLDrawableHandle *drawable,
+WSEGLError CreatePixmapDrawable(WSEGLDisplayHandle display, WSEGLConfig *config, WSEGLDrawableHandle *drawable,
                                 NativePixmapType nativePixmap, WSEGLRotationAngle *rotation)
 {
     if (sIsWayland) {
         return WSEGL_BAD_NATIVE_ENGINE;
     }
+    if (config != nullptr) {
+        LOGVD("Config %d", config->ePixelFormat);
+    }
     auto d = WSDisplayGBM::getFromWSEGL(display);
-    fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    auto *buffer = (struct wl_buffer*)nativePixmap;
-    void* head = *reinterpret_cast<void**>(nativePixmap);
-    auto *kms = wayland_kms_buffer_get(&buffer->resource);
-    fprintf(stderr, "Format %d, Height %d, Width %d\n", kms->format, kms->height, kms->width);
-    void* addr;
-    fprintf(stderr, "kms->fd %d", kms->kms->fd);
-    struct drm_mode_map_dumb mmap_arg = {0};
-    mmap_arg.handle = kms->handle;
-    size_t map_size = kms->stride * kms->height;
-    int ret = drmIoctl(kms->kms->fd, DRM_IOCTL_MODE_MAP_DUMB, &mmap_arg);
-    fprintf(stderr, "ret %d, offset %p\n", ret, mmap_arg.offset);
-    addr = mmap(nullptr, map_size, (PROT_READ | PROT_WRITE), MAP_SHARED, kms->kms->fd, mmap_arg.offset);
-    //ret = drmMap(kms->kms->fd, kms->fd, kms->stride * kms->height, &addr);
-    fprintf(stderr, "ret %d, addr %p\n", ret, addr);
-//    unsigned attribs[] = {
-//        KMS_WIDTH,   static_cast<unsigned int>(kms->width),
-//        KMS_HEIGHT,  static_cast<unsigned int>(kms->height),
-//        KMS_BO_TYPE, KMS_BO_TYPE_SCANOUT_X8R8G8B8,
-//        KMS_HANDLE,  kms->handle,
-//        KMS_TERMINATE_PROP_LIST
-//    };
-//    kms_bo_create(kms->, attribs, &mBuffer);
-//    if (kms->addr) {
-//        if (kms_bo_map(kms->bo, &kms->addr)) {
-//            fprintf(stderr, "Mapping failed\n");
-//        }
-//    }
-//    assert(PVR2DMemMap(d->getContext(), 0, (PVR2D_HANDLE)4, &memInfo) == PVR2D_OK);
-//    assert(PVR2DMemWrap(d->getContext(), 0, (PVR2D_HANDLE)kms->fd, &memInfo) == PVR2D_OK);
-    assert(PVR2DMemWrap(d->getContext(), addr, 0, kms->stride * kms->height, NULL, &memInfo) == PVR2D_OK);
-    fprintf(stderr, "dziala!\n");
-    *drawable = (WSEGLDrawableHandle) 2;
+
+    *drawable = (WSEGLDrawableHandle) new GbmPixmapDrawable(d->getContext(), nativePixmap);
     *rotation = WSEGL_ROTATE_0;
     return WSEGL_SUCCESS;
 }
@@ -286,14 +226,7 @@ WSEGLError CreatePixmapDrawable(WSEGLDisplayHandle display, WSEGLConfig *, WSEGL
 WSEGLError DeleteDrawable(WSEGLDrawableHandle drawable)
 {
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
-    if (drawable == (void*)2) {
-        return WSEGL_SUCCESS;
-    }
-    if (sIsWayland) {
-        delete WSWaylandWindow::getFromWSEGL(drawable);
-    } else {
-        delete WSWindow::getFromWSEGL(drawable);
-    }
+    delete reinterpret_cast<WSEGL::Drawable*>(drawable);
     return WSEGL_SUCCESS;
 }
 
@@ -338,53 +271,27 @@ WSEGLError GetDrawableParameters(WSEGLDrawableHandle drawable, WSEGLDrawablePara
     fprintf(stderr, "DK_%s\n", __FUNCTION__);
     memset(sourceParams, 0, sizeof (WSEGLDrawableParams));
     memset(renderParams, 0, sizeof (WSEGLDrawableParams));
-    if (drawable == (void*)0x2) {
-        renderParams->ui32Width = sourceParams->ui32Width = 250;
-        renderParams->ui32Height = sourceParams->ui32Height = 250;
-        renderParams->ui32Stride = sourceParams->ui32Stride = 250;
-        renderParams->ePixelFormat = sourceParams->ePixelFormat = WSEGL_PIXELFORMAT_ABGR8888;
-        sourceParams->pvLinearAddress = memInfo->pBase;
-        sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
-        sourceParams->ulFlags = memInfo->ulFlags;
+    auto w = reinterpret_cast<WSEGL::Drawable*>(drawable);
+    renderParams->ui32Width = sourceParams->ui32Width = w->getWidth();
+    renderParams->ui32Height = sourceParams->ui32Height = w->getHeight();
+    renderParams->ui32Stride = sourceParams->ui32Stride = w->getStride();
+    renderParams->ePixelFormat = sourceParams->ePixelFormat = w->getFormat();
+    auto memInfo = w->getFrontBuffer()->getMemInfo();
+    sourceParams->pvLinearAddress = memInfo->pBase;
+    sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
+    sourceParams->ulFlags = memInfo->ulFlags;
 
-        renderParams->pvLinearAddress = memInfo->pBase;
-        renderParams->ui32HWAddress = memInfo->ui32DevAddr;
-        renderParams->ulFlags = memInfo->ulFlags;
-    } else
-    if (sIsWayland) {
-        auto w = WSWaylandWindow::getFromWSEGL(drawable);
-        renderParams->ui32Width = sourceParams->ui32Width = w->getWidth();
-        renderParams->ui32Height = sourceParams->ui32Height = w->getHeight();
-        renderParams->ui32Stride = sourceParams->ui32Stride = w->getStride();
-        renderParams->ePixelFormat = sourceParams->ePixelFormat = w->getFormat();
-        auto memInfo = w->getFrontBuffer()->getMemInfo();
-        sourceParams->pvLinearAddress = memInfo->pBase;
-        sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
-        sourceParams->ulFlags = memInfo->ulFlags;
-
-        memInfo = w->getBackBuffer()->getMemInfo();
-        renderParams->pvLinearAddress = memInfo->pBase;
-        renderParams->ui32HWAddress = memInfo->ui32DevAddr;
-        renderParams->ulFlags = memInfo->ulFlags;
-    } else {
-        auto w = WSWindow::getFromWSEGL(drawable);
-        renderParams->ui32Width = sourceParams->ui32Width = w->getWidth();
-        renderParams->ui32Height = sourceParams->ui32Height = w->getHeight();
-        renderParams->ui32Stride = sourceParams->ui32Stride = w->getStride();
-        renderParams->ePixelFormat = sourceParams->ePixelFormat = w->getFormat();
-        auto memInfo = w->getFrontBuffer()->getMemInfo();
-        sourceParams->pvLinearAddress = memInfo->pBase;
-        sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
-        sourceParams->ulFlags = memInfo->ulFlags;
-
-        memInfo = w->getBackBuffer()->getMemInfo();
-        renderParams->pvLinearAddress = memInfo->pBase;
-        renderParams->ui32HWAddress = memInfo->ui32DevAddr;
-        renderParams->ulFlags = memInfo->ulFlags;
-    }
-    fprintf(stderr, "Render 0x%x, 0x%lx, Source 0x%x 0x%lx", renderParams->pvLinearAddress,
+    memInfo = w->getBackBuffer()->getMemInfo();
+    renderParams->pvLinearAddress = memInfo->pBase;
+    renderParams->ui32HWAddress = memInfo->ui32DevAddr;
+    renderParams->ulFlags = memInfo->ulFlags;
+    fprintf(stderr, "Render %p, 0x%lx, Source %p 0x%lx\n", renderParams->pvLinearAddress,
             renderParams->ui32HWAddress, sourceParams->pvLinearAddress,
             sourceParams->ui32HWAddress);
+
+    LOGVD("Render: %d, %d, %d\n"
+          "Source: %d, %d, %d", renderParams->ui32Width, renderParams->ui32Height, renderParams->ui32Stride,
+          sourceParams->ui32Width, sourceParams->ui32Height, sourceParams->ui32Stride);
     return WSEGL_SUCCESS;
 }
 
@@ -432,24 +339,4 @@ static WSEGL_FunctionTable gFunctionTable =
 PVR2D_EXPORT const WSEGL_FunctionTable* WSEGL_GetFunctionTablePointer(void)
 {
     return &gFunctionTable;
-}
-
-unsigned long WSWindow::getWidth() const
-{
-    return mWidth;
-}
-
-unsigned long WSWindow::getHeight() const
-{
-    return mHeight;
-}
-
-unsigned long WSWindow::getStride() const
-{
-    return mStride;
-}
-
-WSEGLPixelFormat WSWindow::getFormat() const
-{
-    return mFormat;
 }

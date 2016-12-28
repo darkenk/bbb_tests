@@ -12,7 +12,8 @@
 using namespace std;
 
 const struct wl_registry_listener WaylandDisplay::sRegistryListener = {
-    WaylandDisplay::registryHandler
+    WaylandDisplay::registryHandler,
+    nullptr
 };
 
 const struct wl_kms_listener WaylandDisplay::sKmsListener = {

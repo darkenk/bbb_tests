@@ -17,7 +17,9 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
+#include "drawable.hpp"
+#include <unistd.h>
+#include <dk_utils/logger.hpp>
 
 using namespace std;
 
@@ -58,6 +60,10 @@ public:
         return mDrmFd;
     }
 
+    wl_display* getNative() {
+        return mNativeDisplay;
+    }
+
 private:
     wl_display* mNativeDisplay;
     wl_event_queue* mEventQueue;
@@ -79,7 +85,7 @@ private:
     void authenticated();
 };
 
-class WSWaylandBuffer : NonCopyable
+class WSWaylandBuffer :public WSEGL::Buffer
 {
 public:
     WSWaylandBuffer(WaylandDisplay* disp, wl_egl_window* nativeWindow): mContext(disp->getContext()) {
@@ -96,13 +102,19 @@ public:
         mFormat = WL_KMS_FORMAT_ABGR8888;
         mHeight = nativeWindow->height;
         mWidth = nativeWindow->width;
-//        mSize = mStride * mHeight;
+        int mSize = mStride * nativeWindow->height;
+
+//        int pagesize_mask = getpagesize() - 1;
+
+//        mSize = ((mSize + pagesize_mask) & ~pagesize_mask);
+        LOGVD("SIZE %d", mSize);
         void* out;
         kms_bo_map(mBuffer, &out);
-        auto ret = PVR2DMemWrap(mContext, out, 0, mStride * nativeWindow->height, NULL, &mMemInfo);
+        auto ret = PVR2DMemWrap(mContext, out, PVR2D_WRAPFLAG_CONTIGUOUS, mSize, NULL, &mMemInfo);
         fprintf(stderr, "WSWaylandBuffer 0x%x, Size: %d\n", ret, mStride);
         fprintf(stderr, "WSWaylandBuffer 0x%lx, Base: %p, PrivateData %p, PrivateMapData %p\n", mMemInfo->ui32DevAddr, mMemInfo->pBase,
                 mMemInfo->hPrivateData, mMemInfo->hPrivateMapData);
+        LOGVD("Range 0x%x - 0x%x", mMemInfo->ui32DevAddr, mMemInfo->ui32DevAddr + mMemInfo->ui32MemSize );
         if (ret != PVR2D_OK) {
             throw std::exception();
         }
@@ -120,17 +132,12 @@ public:
         PVR2DMemFree(mContext, mMemInfo);
     }
 
-    PVR2DMEMINFO* getMemInfo() {
-        return mMemInfo;
-    }
-
     wl_buffer* getWaylandBuffer() {
         return mWaylandBuffer;
     }
 
 private:
     PVR2DCONTEXTHANDLE mContext;
-    PVR2DMEMINFO* mMemInfo;
     kms_bo* mBuffer;
     uint32_t mHandle;
     uint32_t mStride;
@@ -140,24 +147,26 @@ private:
     wl_buffer* mWaylandBuffer;
 };
 
-class WSWaylandWindow : NonCopyable
+class WSWaylandWindow : public WSEGL::Drawable
 {
 public:
     WSWaylandWindow(WaylandDisplay* display, NativeWindowType nativeWindow):
-        mContext(display->getContext()) {
+        Drawable(display->getContext(),
+            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->width,
+            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->height,
+            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->width,
+            WSEGL_PIXELFORMAT_8888) {
         auto w = reinterpret_cast<struct wl_egl_window*>(nativeWindow);
-        fprintf(stderr, "DK %dx%d", w->width, w->height);
-        mFormat = WSEGL_PIXELFORMAT_ABGR8888;
-        mHeight = w->height;
-        mWidth = w->width;
-        mStride = w->width;
-        mIndex = 0;
+        fprintf(stderr, "DK %dx%d\n", w->width, w->height);
+
+        LOGVD("%d x %d ---- (%d,%d) ", w->attached_width, w->attached_height, w->dx, w->dy);
         mSurface = w->surface;
         for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
             mBuffers[i] = new WSWaylandBuffer(display, w);
         }
+        mDisplay = display;
     }
-    ~WSWaylandWindow() {
+    virtual ~WSWaylandWindow() {
         for (auto b : mBuffers) {
             delete b;
         }
@@ -167,37 +176,24 @@ public:
         return reinterpret_cast<WSWaylandWindow*>(handle);
     }
 
-    unsigned long getWidth() const { return mWidth; }
-    unsigned long getHeight() const { return mHeight; }
-    unsigned long getStride() const { return mStride; }
-    WSEGLPixelFormat getFormat() const {return mFormat; }
-
-    WSWaylandBuffer* getFrontBuffer() {
-        return mBuffers[mIndex];
-    }
-
-    WSWaylandBuffer* getBackBuffer() {
-        return mBuffers[(mIndex - 1) % BUFFER_COUNT];
-    }
-
-    void swapBuffers() {
+    virtual void swapBuffers() {
         //PVR2DQueryBlitsComplete(mContext, getBackBuffer()->getMemInfo(), 1);
-        wl_surface_attach(mSurface, getFrontBuffer()->getWaylandBuffer(), 0, 0);
+        wl_surface_attach(mSurface, ((WSWaylandBuffer*)getFrontBuffer())->getWaylandBuffer(), 0, 0);
         wl_surface_commit(mSurface);
-        mIndex = (mIndex + 1) % BUFFER_COUNT;
-        fprintf(stderr, "Current buffer %d\n", mIndex);
+        WSEGL::Drawable::swapBuffers();
+        wl_display_roundtrip(mDisplay->getNative());
+        //sleep(1);
+//        wl_display_roundtrip(mDisplay->getNative());
+//        for(;;) {}
+    }
+
+    WaylandDisplay* getDisplay() {
+        return mDisplay;
     }
 
 private:
-    static constexpr size_t BUFFER_COUNT = 2;
-    unsigned int mIndex;
-    PVR2DCONTEXTHANDLE mContext;
-    unsigned long mWidth;
-    unsigned long mHeight;
-    unsigned long mStride;
-    WSEGLPixelFormat mFormat;
-    std::array<WSWaylandBuffer*, BUFFER_COUNT> mBuffers;
     wl_surface* mSurface;
+    WaylandDisplay* mDisplay;
 };
 
 
