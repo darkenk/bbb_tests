@@ -26,26 +26,28 @@ public:
         mPvrCtx(ctx) {
         struct drm_mode_map_dumb mmap_arg = {0};
         mmap_arg.handle = kmsBuffer->handle;
-        LOGVP("Buffer = %dx%d stride: %d", kmsBuffer->width, kmsBuffer->height, kmsBuffer->stride);
+//        LOGVP("Buffer = %dx%d stride: %d", kmsBuffer->width, kmsBuffer->height, kmsBuffer->stride);
         mSize = kmsBuffer->stride * kmsBuffer->height;
         int ret = drmIoctl(kmsBuffer->kms->fd, DRM_IOCTL_MODE_MAP_DUMB, &mmap_arg);
-        fprintf(stderr, "ret %d, offset %llu\n", ret, mmap_arg.offset);
-
-//        int pagesize_mask = getpagesize() - 1;
-
-//        mSize = ((mSize +pagesize_mask) & ~pagesize_mask);
         mAddr = mmap(nullptr, mSize, (PROT_READ | PROT_WRITE), MAP_SHARED, kmsBuffer->kms->fd,
                     mmap_arg.offset);
-        LOGVD("SIZE %d", mSize);
 
         assert(PVR2DMemWrap(mPvrCtx, mAddr, PVR2D_WRAPFLAG_CONTIGUOUS, mSize, nullptr, &mMemInfo) == PVR2D_OK);
-        LOGVD("Range 0x%x - 0x%x", mMemInfo->ui32DevAddr, mMemInfo->ui32DevAddr + mMemInfo->ui32MemSize );
     }
 
     virtual ~GbmPixmapBuffer() {
         PVR2DMemFree(mPvrCtx, mMemInfo);
         munmap(mAddr, mSize);
     }
+
+
+//    void dump() {
+//        uint8_t* out;
+//        kms_bo_map(mBuffer, (void**)&out);
+//        FILE* f = fopen("/tmp/wayland-client.data", "wb");
+//        fwrite(out, sizeof(uint8_t), mStride * mHeight, f);
+//        fclose(f);
+//    }
 
 private:
     PVR2DCONTEXTHANDLE mPvrCtx;
@@ -58,15 +60,15 @@ class GbmPixmapDrawable : public WSEGL::Drawable
 public:
     GbmPixmapDrawable(PVR2DCONTEXTHANDLE ctx, NativePixmapType pixmap):
         Drawable(ctx) {
-        fprintf(stderr, "Start %p this\n", this);
         auto* resource = reinterpret_cast<wl_resource*>(pixmap);
         auto* kmsBuffer = wayland_kms_buffer_get(resource);
         mBuffers[0] = mBuffers[1] = new GbmPixmapBuffer(ctx, kmsBuffer);
         init(kmsBuffer->width, kmsBuffer->height, kmsBuffer->stride / 4, WSEGL_PIXELFORMAT_ARGB8888);
+        //LOGVD("buffer %d, %d", kmsBuffer->width, kmsBuffer->stride);
     }
 
     virtual ~GbmPixmapDrawable() {
-        fprintf(stderr, "Delete %p this\n", this);
+//        fprintf(stderr, "Delete %p this\n", this);
         delete mBuffers[0];
     }
 

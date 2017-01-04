@@ -64,6 +64,8 @@ public:
         return mNativeDisplay;
     }
 
+    int roundtrip();
+
 private:
     wl_display* mNativeDisplay;
     wl_event_queue* mEventQueue;
@@ -73,12 +75,15 @@ private:
 
     static const struct wl_registry_listener sRegistryListener;
     static const struct wl_kms_listener sKmsListener;
+    static const struct wl_callback_listener sSyncListener;
 
     static void registryHandler(void *data, struct wl_registry *registry, uint32_t name,
         const char *interface, uint32_t version);
     static void kmsDeviceHandler(void *data, struct wl_kms *wl_kms, const char *name);
     static void kmsFormatHandler(void *data, struct wl_kms *wl_kms, uint32_t format);
     static void kmsAuthenticatedHandler(void* data, wl_kms *wl_kms);
+    static void syncCallback(void *data, struct wl_callback *, uint32_t /*serial*/);
+
 
     void bindKms(struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version);
     void authenticateKms(const char* name);
@@ -90,7 +95,7 @@ class WSWaylandBuffer :public WSEGL::Buffer
 public:
     WSWaylandBuffer(WaylandDisplay* disp, wl_egl_window* nativeWindow): mContext(disp->getContext()) {
         unsigned attribs[] = {
-            KMS_WIDTH,   static_cast<unsigned int>(nativeWindow->width),
+            KMS_WIDTH,   static_cast<unsigned int>(nativeWindow->width + 6),
             KMS_HEIGHT,  static_cast<unsigned int>(nativeWindow->height),
             KMS_BO_TYPE, KMS_BO_TYPE_SCANOUT_X8R8G8B8,
             KMS_TERMINATE_PROP_LIST
@@ -99,15 +104,12 @@ public:
 
         kms_bo_get_prop(mBuffer, KMS_PITCH, &mStride);
         kms_bo_get_prop(mBuffer, KMS_HANDLE, &mHandle);
-        mFormat = WL_KMS_FORMAT_ABGR8888;
+        mFormat = WL_KMS_FORMAT_ARGB8888;
         mHeight = nativeWindow->height;
-        mWidth = nativeWindow->width;
+        mWidth = nativeWindow->width + 6;
         int mSize = mStride * nativeWindow->height;
 
-//        int pagesize_mask = getpagesize() - 1;
-
-//        mSize = ((mSize + pagesize_mask) & ~pagesize_mask);
-        LOGVD("SIZE %d", mSize);
+        LOGVD("Stride %d", mStride);
         void* out;
         kms_bo_map(mBuffer, &out);
         auto ret = PVR2DMemWrap(mContext, out, PVR2D_WRAPFLAG_CONTIGUOUS, mSize, NULL, &mMemInfo);
@@ -136,6 +138,14 @@ public:
         return mWaylandBuffer;
     }
 
+    void dump() {
+        uint8_t* out;
+        kms_bo_map(mBuffer, (void**)&out);
+        FILE* f = fopen("/tmp/wayland-client.data", "wb");
+        fwrite(out, sizeof(uint8_t), mStride * mHeight, f);
+        fclose(f);
+    }
+
 private:
     PVR2DCONTEXTHANDLE mContext;
     kms_bo* mBuffer;
@@ -152,13 +162,13 @@ class WSWaylandWindow : public WSEGL::Drawable
 public:
     WSWaylandWindow(WaylandDisplay* display, NativeWindowType nativeWindow):
         Drawable(display->getContext(),
-            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->width,
+            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->width + 6,
             reinterpret_cast<struct wl_egl_window*>(nativeWindow)->height,
-            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->width,
-            WSEGL_PIXELFORMAT_8888) {
+            reinterpret_cast<struct wl_egl_window*>(nativeWindow)->width + 6,
+            WSEGL_PIXELFORMAT_ARGB8888),
+        mBufferConsumedByCompositor(true)
+    {
         auto w = reinterpret_cast<struct wl_egl_window*>(nativeWindow);
-        fprintf(stderr, "DK %dx%d\n", w->width, w->height);
-
         LOGVD("%d x %d ---- (%d,%d) ", w->attached_width, w->attached_height, w->dx, w->dy);
         mSurface = w->surface;
         for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
@@ -178,10 +188,16 @@ public:
 
     virtual void swapBuffers() {
         //PVR2DQueryBlitsComplete(mContext, getBackBuffer()->getMemInfo(), 1);
-        wl_surface_attach(mSurface, ((WSWaylandBuffer*)getFrontBuffer())->getWaylandBuffer(), 0, 0);
+        if (!mBufferConsumedByCompositor) {
+            wl_display_roundtrip(mDisplay->getNative());
+        }
+        mBufferConsumedByCompositor = false;
+        auto c = wl_surface_frame(mSurface);
+        wl_callback_add_listener(c, &sThrottleListener, this);
+        auto b = (WSWaylandBuffer*)getFrontBuffer();
+        wl_surface_attach(mSurface, b->getWaylandBuffer(), 0, 0);
         wl_surface_commit(mSurface);
         WSEGL::Drawable::swapBuffers();
-        wl_display_roundtrip(mDisplay->getNative());
         //sleep(1);
 //        wl_display_roundtrip(mDisplay->getNative());
 //        for(;;) {}
@@ -191,9 +207,16 @@ public:
         return mDisplay;
     }
 
+
 private:
     wl_surface* mSurface;
     WaylandDisplay* mDisplay;
+    bool mBufferConsumedByCompositor;
+
+    static const struct wl_callback_listener sThrottleListener;
+
+    static void throttleCallback(void *data, struct wl_callback *callback, uint32_t /*time*/);
+
 };
 
 

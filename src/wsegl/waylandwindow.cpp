@@ -22,19 +22,41 @@ const struct wl_kms_listener WaylandDisplay::sKmsListener = {
     WaylandDisplay::kmsAuthenticatedHandler
 };
 
+const struct wl_callback_listener WaylandDisplay::sSyncListener = {
+     WaylandDisplay::syncCallback
+};
+
+const struct wl_callback_listener WSWaylandWindow::sThrottleListener = {
+    .done = throttleCallback
+};
+
+
 WaylandDisplay::WaylandDisplay(wl_display* nativeDisplay) {
     mNativeDisplay = nativeDisplay;
     mEventQueue = wl_display_create_queue(nativeDisplay);
     auto registry = wl_display_get_registry(nativeDisplay);
     wl_proxy_set_queue(reinterpret_cast<wl_proxy*>(registry), mEventQueue);
-    wl_display_sync(nativeDisplay);
     wl_registry_add_listener(registry, &sRegistryListener, this);
     wl_display_roundtrip_queue(nativeDisplay, mEventQueue);
-
 }
 
 WaylandDisplay::~WaylandDisplay() {
     wl_event_queue_destroy(mEventQueue);
+}
+
+int WaylandDisplay::roundtrip() {
+    struct wl_callback *callback;
+    int done = 0, ret = 0;
+
+    callback = wl_display_sync(mNativeDisplay);
+    wl_callback_add_listener(callback, &sSyncListener, &done);
+    wl_proxy_set_queue((struct wl_proxy *) callback, mEventQueue);
+    while (ret != -1 && !done)
+        ret = wl_display_dispatch_queue(mNativeDisplay, mEventQueue);
+
+    wl_callback_destroy(callback);
+
+    return ret;
 }
 
 void WaylandDisplay::registryHandler(void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version)
@@ -42,7 +64,6 @@ void WaylandDisplay::registryHandler(void* data, wl_registry* registry, uint32_t
     if (strcmp(interface, "wl_kms") == 0) {
         auto wd = reinterpret_cast<WaylandDisplay*>(data);
         wd->bindKms(registry, name, interface, version);
-        fprintf(stderr, "wl_kms found\n");
     }
 }
 
@@ -65,6 +86,12 @@ void WaylandDisplay::kmsAuthenticatedHandler(void* data, wl_kms* wl_kms)
     fprintf(stderr, "kms authenticated\n");
 }
 
+void WaylandDisplay::syncCallback(void* data, wl_callback* /*callback*/, uint32_t)
+{
+    int *done = reinterpret_cast<int*>(data);
+    *done = 1;
+}
+
 void WaylandDisplay::bindKms(wl_registry* registry, uint32_t name, const char* interface, uint32_t version)
 {
     mKmsInterface = reinterpret_cast<wl_kms*>(wl_registry_bind(registry, name, &wl_kms_interface, 1));
@@ -75,7 +102,6 @@ void WaylandDisplay::bindKms(wl_registry* registry, uint32_t name, const char* i
 void WaylandDisplay::authenticateKms(const char* name)
 {
     mDrmFd = open(name, O_RDWR | O_CLOEXEC);
-    fprintf(stderr, "FD %d\n", mDrmFd);
     drm_magic_t magic;
     drmGetMagic(mDrmFd, &magic);
     wl_kms_authenticate(mKmsInterface, magic);
@@ -85,4 +111,10 @@ void WaylandDisplay::authenticateKms(const char* name)
 void WaylandDisplay::authenticated()
 {
     kms_create(mDrmFd, &mKmsDriver);
+}
+
+void WSWaylandWindow::throttleCallback(void* data, wl_callback* callback, uint32_t) {
+    auto *w = reinterpret_cast<WSWaylandWindow*>(data);
+    w->mBufferConsumedByCompositor = true;
+    wl_callback_destroy(callback);
 }
