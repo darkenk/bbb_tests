@@ -1,6 +1,5 @@
 project(bbb_tests)
 cmake_minimum_required(VERSION 2.8.12)
-aux_source_directory(. SRC_LIST)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE DEBUG CACHE STRING
@@ -14,16 +13,19 @@ set(CMAKE_MODULE_PATH
     ${ECM_FIND_MODULE_DIR}
 )
 
-set(ENABLE_TESTS OFF CACHE BOOL "Disable dk_utils tests" FORCE)
-find_package(dk_utils REQUIRED)
-find_package(DRM REQUIRED)
-
-include_directories(
-    ${DRM_INCLUDE_DIRS}
-)
-
-#add_executable(${PROJECT_NAME} main.c)
+set(ENABLE_TESTS ONb CACHE BOOL "Disable dk_utils tests" FORCE)
 add_definitions(-std=c++11)
-add_subdirectory(src)
-#target_link_libraries(${PROJECT_NAME} ${DRM_LIBRARIES})
+find_package(dk_utils REQUIRED)
 
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
+    find_package(DRM REQUIRED)
+    include_directories(
+        ${DRM_INCLUDE_DIRS}
+    )
+    add_subdirectory(src)
+endif()
+
+option(ENABLE_UNIT_TESTS "Enable unit tests" OFF)
+if(ENABLE_UNIT_TESTS)
+    add_subdirectory(test)
+endif()

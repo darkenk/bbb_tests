@@ -9,7 +9,6 @@
 #include <dk_utils/noncopyable.hpp>
 #include <dk_utils/logger.hpp>
 
-#include "gbm_kmsint.h"
 #include <cstring>
 
 #include <wayland-egl.h>
@@ -44,7 +43,6 @@ public:
         if (ret != PVR2D_OK) {
             LOGVP("Cannot create device context\n");
         }
-        LOGVP("DK_%s Context created 0x%x\n", __FUNCTION__, mContext);
 
         mConfigs[0].ui32DrawableType = WSEGL_DRAWABLE_WINDOW;
         mConfigs[0].ePixelFormat = WSEGL_PIXELFORMAT_8888;
@@ -106,13 +104,7 @@ class WSWindow : public WSEGL::Drawable
 {
 public:
     WSWindow(PVR2DCONTEXTHANDLE ctx, struct gbm_kms_surface* surface):
-        Drawable(ctx,
-            surface->bo[0]->base.width,
-            surface->bo[0]->base.height,
-            surface->bo[0]->base.stride / 4,
-            WSEGL_PIXELFORMAT_ARGB8888
-        ),
-        mSurface(surface) {
+        Drawable(ctx), mSurface(surface) {
         for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
             mBuffers[i] = new WSBuffer(ctx, surface->bo[i]);
         }
@@ -139,14 +131,11 @@ private:
 
 WSEGLError IsDisplayValid(NativeDisplayType disp)
 {
-    LOGVP("DK_%s 0x%x\n", __FUNCTION__, disp);
     void* head = *reinterpret_cast<void**>(disp);
     sIsWayland = (head == reinterpret_cast<const void*>(&wl_display_interface));
     if (sIsWayland || head == reinterpret_cast<void*>(gbm_create_device)) {
-        LOGVP("Valid display\n");
         return WSEGL_SUCCESS;
     } else {
-        LOGVP("InValid display\n");
         return WSEGL_BAD_NATIVE_DISPLAY;
     }
 }
@@ -158,14 +147,13 @@ WSEGLError InitialiseDisplay(NativeDisplayType disp, WSEGLDisplayHandle* display
     if (true && sIsWayland) {
         auto d = new WaylandDisplay(reinterpret_cast<wl_display*>(disp));
         *display = reinterpret_cast<WSEGLDisplayHandle>(d);
-        *caps = wseglDisplayCaps;
         *config = d->getConfigs();
     } else {
         auto d = new WSDisplayGBM;
         *display = reinterpret_cast<WSEGLDisplayHandle>(d);
-        *caps = wseglDisplayCaps;
         *config = d->getConfigs();
     }
+    *caps = wseglDisplayCaps;
     return WSEGL_SUCCESS;
 }
 
@@ -184,25 +172,16 @@ WSEGLError CreateWindowDrawable(WSEGLDisplayHandle display, WSEGLConfig * config
                                 WSEGLDrawableHandle* drawable, NativeWindowType window,
                                 WSEGLRotationAngle* rotation)
 {
-    LOGVP("DK_%s\n", __FUNCTION__);
-
+    WSEGL::Drawable* w;
     if (sIsWayland) {
-        if (config == NULL || !(config->ui32DrawableType & WSEGL_DRAWABLE_WINDOW)) {
-            LOGVP("selected config does not support window drawables");
-            return WSEGL_BAD_CONFIG;
-        }
         auto d = WaylandDisplay::getFromWSEGL(display);
-        LOGVP("Pixel Format 0x%x", config->ePixelFormat);
-        auto w = new WSWaylandWindow(d, window);
-        *drawable = w;
+        w = new WSWaylandWindow(d, window);
     } else {
         auto d = WSDisplayGBM::getFromWSEGL(display);
         auto s = reinterpret_cast<struct gbm_kms_surface*>(window);
-        LOGVP("DK %dx%d\n", s->base.width, s->base.height);
-
-        auto w = new WSWindow(d->getContext(), s);
-        *drawable = w;
+        w = new WSWindow(d->getContext(), s);
     }
+    *drawable = w;
     *rotation = WSEGL_ROTATE_0;
     return WSEGL_SUCCESS;
 }
@@ -232,7 +211,6 @@ WSEGLError DeleteDrawable(WSEGLDrawableHandle drawable)
 
 WSEGLError SwapDrawable(WSEGLDrawableHandle window, unsigned long)
 {
-//    LOGVP("DK_%s\n", __FUNCTION__);
     if (sIsWayland) {
         WSWaylandWindow::getFromWSEGL(window)->swapBuffers();
     } else {
@@ -265,52 +243,45 @@ WSEGLError CopyFromPBuffer(void *, unsigned long, unsigned long, unsigned long, 
     return WSEGL_BAD_MATCH;
 }
 
+static void fillDrawableParams(WSEGLDrawableParams* params, WSEGL::Buffer* b)
+{
+    memset(params, 0, sizeof (WSEGLDrawableParams));
+    params->ui32Width = b->getWidth();
+    params->ui32Height = b->getHeight();
+    params->ui32Stride = b->getStride();
+    params->ePixelFormat = b->getFormat();
+    auto memInfo = b->getMemInfo();
+    params->pvLinearAddress = memInfo->pBase;
+    params->ui32HWAddress = memInfo->ui32DevAddr;
+    params->ulFlags = memInfo->ulFlags;
+}
+
 WSEGLError GetDrawableParameters(WSEGLDrawableHandle drawable, WSEGLDrawableParams* sourceParams,
                                  WSEGLDrawableParams* renderParams, unsigned long flags)
 {
+    auto w = reinterpret_cast<WSEGL::Drawable*>(drawable);
+    fillDrawableParams(sourceParams, w->getFrontBuffer());
+    fillDrawableParams(renderParams, w->getBackBuffer());
     memset(sourceParams, 0, sizeof (WSEGLDrawableParams));
     memset(renderParams, 0, sizeof (WSEGLDrawableParams));
-    auto w = reinterpret_cast<WSEGL::Drawable*>(drawable);
-    renderParams->ui32Width = sourceParams->ui32Width = w->getWidth();
-    renderParams->ui32Height = sourceParams->ui32Height = w->getHeight();
-    renderParams->ui32Stride = sourceParams->ui32Stride = w->getStride();
-    renderParams->ePixelFormat = sourceParams->ePixelFormat = w->getFormat();
-    auto memInfo = w->getFrontBuffer()->getMemInfo();
-    sourceParams->pvLinearAddress = memInfo->pBase;
-    sourceParams->ui32HWAddress = memInfo->ui32DevAddr;
-    sourceParams->ulFlags = memInfo->ulFlags;
-
-    memInfo = w->getBackBuffer()->getMemInfo();
-    renderParams->pvLinearAddress = memInfo->pBase;
-    renderParams->ui32HWAddress = memInfo->ui32DevAddr;
-    renderParams->ulFlags = memInfo->ulFlags;
-//    LOGVP("Render %p, 0x%lx, Source %p 0x%lx\n", renderParams->pvLinearAddress,
-//            renderParams->ui32HWAddress, sourceParams->pvLinearAddress,
-//            sourceParams->ui32HWAddress);
-
-//    LOGVD("Render: %d, %d, %d\n"
-//          "Source: %d, %d, %d", renderParams->ui32Width, renderParams->ui32Height, renderParams->ui32Stride,
-//          sourceParams->ui32Width, sourceParams->ui32Height, sourceParams->ui32Stride);
     return WSEGL_SUCCESS;
 }
 
 WSEGLError ConnectDrawable(WSEGLDrawableHandle)
 {
     LOGVP("DK_%s\n", __FUNCTION__);
-    //dummy what should I do here?
     return WSEGL_SUCCESS;
 }
 
 WSEGLError DisconnectDrawable(WSEGLDrawableHandle)
 {
     LOGVP("DK_%s\n", __FUNCTION__);
-    //dummy what should I do here?
     return WSEGL_SUCCESS;
 }
 
 WSEGLError FlagStartFrame(void)
 {
-//    LOGVP("DK_%s=====================================================\n", __FUNCTION__);
+    LOGVP("DK_%s\n", __FUNCTION__);
     return WSEGL_SUCCESS;
 }
 

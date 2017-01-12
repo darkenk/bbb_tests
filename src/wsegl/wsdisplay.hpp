@@ -19,10 +19,6 @@ public:
         PVR2DEnumerateDevices(&devices[0]);
         assert(devices.size());
 
-        for (auto dev : devices) {
-            fprintf(stderr, "DK_%s ulDevId: %ld, name: %s\n", __FUNCTION__, dev.ulDevID, dev.szDeviceName);
-        }
-
         auto ret = PVR2DCreateDeviceContext(devices[0].ulDevID, &mContext, 0);
         if (ret != PVR2D_OK) {
             fprintf(stderr, "Cannot create device context\n");

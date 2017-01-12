@@ -2,6 +2,7 @@
 set(CMAKE_SYSTEM_NAME Linux)
 #this one not so much
 set(CMAKE_SYSTEM_VERSION 1)
+set(CMAKE_SYSTEM_PROCESSOR arm)
 
 set(CMAKE_LIBRARY_ARCHITECTURE arm-linux-gnueabihf)
 
