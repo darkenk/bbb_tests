@@ -12,7 +12,6 @@ extern "C" {
 #include <wayland-kms-client-protocol.h>
 }
 #include <libkms/libkms.h>
-#include "wsdisplay.hpp"
 #include "../drm_1/lib/resources.hpp"
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -40,85 +39,14 @@ struct wl_egl_window {
 
 namespace WSEGL {
 
-class WaylandDisplay : public WSDisplay
+class WaylandDisplay;
+
+class WaylandBuffer :public Buffer
 {
 public:
-    WaylandDisplay(wl_display* nativeDisplay);
-    ~WaylandDisplay();
+    WaylandBuffer(WaylandDisplay* disp, wl_egl_window* nativeWindow);
 
-    static WaylandDisplay* getFromWSEGL(WSEGLDisplayHandle handle) {
-        return reinterpret_cast<WaylandDisplay*>(handle);
-    }
-
-    kms_driver* getKmsDriver() {
-        return mKmsDriver;
-    }
-
-    wl_kms* getKmsInterface() {
-        return mKmsInterface;
-    }
-
-    int getDrmFd() {
-        return mDrmFd;
-    }
-
-    wl_display* getNative() {
-        return mNativeDisplay;
-    }
-
-//    int roundtrip();
-
-private:
-    wl_display* mNativeDisplay;
-    wl_event_queue* mEventQueue;
-    wl_kms* mKmsInterface;
-    int mDrmFd;
-    kms_driver* mKmsDriver;
-
-    static const struct wl_registry_listener sRegistryListener;
-    static const struct wl_kms_listener sKmsListener;
-    static const struct wl_callback_listener sSyncListener;
-
-    static void registryHandler(void *data, struct wl_registry *registry, uint32_t name,
-        const char *interface, uint32_t version);
-    static void kmsDeviceHandler(void *data, struct wl_kms *wl_kms, const char *name);
-    static void kmsFormatHandler(void *data, struct wl_kms *wl_kms, uint32_t format);
-    static void kmsAuthenticatedHandler(void* data, wl_kms *wl_kms);
-    static void syncCallback(void *data, struct wl_callback *, uint32_t /*serial*/);
-
-
-    void bindKms(struct wl_registry *registry, uint32_t name, uint32_t version);
-    void authenticateKms(const char* name);
-    void authenticated();
-};
-
-class WSWaylandBuffer :public Buffer
-{
-public:
-    WSWaylandBuffer(WaylandDisplay* disp, wl_egl_window* nativeWindow):
-        Buffer(disp->getContext()) {
-        unsigned width = nativeWindow->width;
-        unsigned stride = upperPowerOfTwo(width);
-        unsigned height = nativeWindow->height;
-        unsigned handle = handle;
-        auto format = WL_KMS_FORMAT_ARGB8888;
-        mBuffer = createKmsBuffer(disp->getKmsDriver(), stride, height);
-
-        kms_bo_get_prop(mBuffer, KMS_PITCH, &stride);
-        kms_bo_get_prop(mBuffer, KMS_HANDLE, &handle);
-        stride /= getSizeOfPixel(convertWaylandFormatToPVR2DFormat(format));
-
-        void* out;
-        kms_bo_map(mBuffer, &out);
-        init(width, height, stride, convertWaylandFormatToPVR2DFormat(format), out);
-        kms_bo_unmap(mBuffer);
-        int prime;
-        drmPrimeHandleToFD(disp->getDrmFd(), handle, 0, &prime);
-        mWaylandBuffer = wl_kms_create_buffer(disp->getKmsInterface(), prime, width,
-                                              height, stride, format, 0);
-    }
-
-    ~WSWaylandBuffer() {
+    ~WaylandBuffer() override {
         kms_bo_destroy(&mBuffer);
     }
 
@@ -155,46 +83,18 @@ private:
 
 };
 
-class WSWaylandWindow : public Drawable
+class WaylandWindow : public Drawable
 {
 public:
-    WSWaylandWindow(WaylandDisplay* display, NativeWindowType nativeWindow):
-        Drawable(display->getContext()), mBufferConsumedByCompositor(true)
-    {
-        auto w = reinterpret_cast<struct wl_egl_window*>(nativeWindow);
-        mSurface = w->surface;
-        for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
-            mBuffers[i] = new WSWaylandBuffer(display, w);
-        }
-        mDisplay = display;
-    }
-    virtual ~WSWaylandWindow() {
+    WaylandWindow(WaylandDisplay* display, NativeWindowType nativeWindow);
+
+    virtual ~WaylandWindow() override {
         for (auto b : mBuffers) {
             delete b;
         }
     }
 
-    static WSWaylandWindow* getFromWSEGL(WSEGLDrawableHandle handle) {
-        return reinterpret_cast<WSWaylandWindow*>(handle);
-    }
-
-    virtual void swapBuffers() {
-        if (!mBufferConsumedByCompositor) {
-            wl_display_roundtrip(mDisplay->getNative());
-        }
-        mBufferConsumedByCompositor = false;
-        auto c = wl_surface_frame(mSurface);
-        wl_callback_add_listener(c, &sThrottleListener, this);
-        auto b = (WSWaylandBuffer*)getFrontBuffer();
-        wl_surface_attach(mSurface, b->getWaylandBuffer(), 0, 0);
-        wl_surface_commit(mSurface);
-        WSEGL::Drawable::swapBuffers();
-    }
-
-    WaylandDisplay* getDisplay() {
-        return mDisplay;
-    }
-
+    virtual void swapBuffers() override;
 
 private:
     wl_surface* mSurface;
@@ -205,6 +105,62 @@ private:
 
     static void throttleCallback(void *data, struct wl_callback *callback, uint32_t /*time*/);
 
+};
+
+
+class WaylandDisplay : public Display
+{
+public:
+    WaylandDisplay(wl_display* nativeDisplay);
+    ~WaylandDisplay() override;
+
+    static WaylandDisplay* getFromWSEGL(WSEGLDisplayHandle handle) {
+        return reinterpret_cast<WaylandDisplay*>(handle);
+    }
+
+    kms_driver* getKmsDriver() {
+        return mKmsDriver;
+    }
+
+    wl_kms* getKmsInterface() {
+        return mKmsInterface;
+    }
+
+    int getDrmFd() {
+        return mDrmFd;
+    }
+
+    wl_display* getNative() {
+        return mNativeDisplay;
+    }
+
+    Drawable* createWindow(NativeWindowType window) override {
+        return new WaylandWindow(this, window);
+    }
+//    int roundtrip();
+
+private:
+    wl_display* mNativeDisplay;
+    wl_event_queue* mEventQueue;
+    wl_kms* mKmsInterface;
+    int mDrmFd;
+    kms_driver* mKmsDriver;
+
+    static const struct wl_registry_listener sRegistryListener;
+    static const struct wl_kms_listener sKmsListener;
+    static const struct wl_callback_listener sSyncListener;
+
+    static void registryHandler(void *data, struct wl_registry *registry, uint32_t name,
+        const char *interface, uint32_t version);
+    static void kmsDeviceHandler(void *data, struct wl_kms *wl_kms, const char *name);
+    static void kmsFormatHandler(void *data, struct wl_kms *wl_kms, uint32_t format);
+    static void kmsAuthenticatedHandler(void* data, wl_kms *wl_kms);
+    static void syncCallback(void *data, struct wl_callback *, uint32_t /*serial*/);
+
+
+    void bindKms(struct wl_registry *registry, uint32_t name, uint32_t version);
+    void authenticateKms(const char* name);
+    void authenticated();
 };
 
 }

@@ -5,6 +5,8 @@
 #include <dk_utils/exceptions.hpp>
 #include "wsegl_plugin.hpp"
 #include <array>
+#include <vector>
+#include <cassert>
 #include <pvr2d/pvr2d.h>
 #include <wayland-kms-client-protocol.h>
 
@@ -47,7 +49,7 @@ protected:
         mHeight = h;
         mStride = s;
         mFormat = f;
-        PVR2DMemWrap(mContext, mem, 0, mStride * mHeight, nullptr, &mMemInfo);
+        PVR2DMemWrap(mContext, mem, 0, mStride * mHeight * getSizeOfPixel(f), nullptr, &mMemInfo);
     }
 
     WSEGLPixelFormat convertWaylandFormatToPVR2DFormat(uint32_t format) {
@@ -63,7 +65,7 @@ protected:
         }
     }
 
-    int getSizeOfPixel(WSEGLPixelFormat format) {
+    unsigned getSizeOfPixel(WSEGLPixelFormat format) {
         switch(format) {
         case WSEGL_PIXELFORMAT_ARGB8888: return 4;
         case WSEGL_PIXELFORMAT_RGB565: return 2;
@@ -117,6 +119,53 @@ protected:
 private:
     unsigned int mIndex;
     PVR2DCONTEXTHANDLE mPVR2DCxt;
+};
+
+class Display : NonCopyable
+{
+public:
+    Display() {
+        int deviceCount = PVR2DEnumerateDevices(0);
+        std::vector<PVR2DDEVICEINFO> devices(deviceCount);
+        PVR2DEnumerateDevices(&devices[0]);
+        assert(devices.size());
+
+        auto ret = PVR2DCreateDeviceContext(devices[0].ulDevID, &mContext, 0);
+        if (ret != PVR2D_OK) {
+            fprintf(stderr, "Cannot create device context\n");
+        }
+
+        mConfigs[0].ui32DrawableType = WSEGL_DRAWABLE_WINDOW;
+        mConfigs[0].ePixelFormat = WSEGL_PIXELFORMAT_8888;
+        mConfigs[0].ulNativeRenderable = WSEGL_FALSE;
+        mConfigs[0].ulFrameBufferLevel = 0;
+        mConfigs[0].ulNativeVisualID = 0;
+        mConfigs[0].ulNativeVisualType = 0;
+        mConfigs[0].eTransparentType = WSEGL_OPAQUE;
+        mConfigs[0].ulTransparentColor = 0;
+        mConfigs[0].ulFramebufferTarget = WSEGL_TRUE;
+    }
+
+    virtual ~Display() {
+        auto ret = PVR2DDestroyDeviceContext(mContext);
+        if (ret != PVR2D_OK) {
+            fprintf(stderr, "Cannot destroy device context\n");
+        }
+    }
+
+    WSEGLConfig* getConfigs() {
+        return mConfigs;
+    }
+
+    PVR2DCONTEXTHANDLE getContext() {
+        return mContext;
+    }
+
+    virtual Drawable* createWindow(NativeWindowType window) = 0;
+
+private:
+    PVR2DCONTEXTHANDLE mContext;
+    WSEGLConfig mConfigs[1];
 };
 
 }

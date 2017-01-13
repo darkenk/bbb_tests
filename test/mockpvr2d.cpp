@@ -5,6 +5,28 @@ using namespace testing;
 
 static MockPVR2D* gMock = nullptr;
 
+class FakePVR2D
+{
+public:
+    PVR2DERROR MemWrap(PVR2DCONTEXTHANDLE hContext, PVR2D_VOID *pMem, PVR2D_ULONG ulFlags,
+                            PVR2D_ULONG ulBytes, PVR2D_ULONG alPageAddress[],
+                            PVR2DMEMINFO **ppsMemInfo) {
+        auto mem = new PVR2DMEMINFO();
+        memset(mem, 0, sizeof(*mem));
+        mem->ui32MemSize = ulBytes;
+        mem->ulFlags = ulFlags;
+        *ppsMemInfo = mem;
+        return PVR2D_OK;
+    }
+
+    PVR2DERROR MemFree(PVR2DCONTEXTHANDLE hContext, PVR2DMEMINFO *psMemInfo) {
+        delete psMemInfo;
+        return PVR2D_OK;
+    }
+
+
+};
+
 MockPVR2D::MockPVR2D()
 {
     if (gMock) {
@@ -18,11 +40,11 @@ MockPVR2D::MockPVR2D()
     ON_CALL(*this, CreateDeviceContext(_, _, _)).WillByDefault(Return(PVR2D_OK));
     ON_CALL(*this, DestroyDeviceContext(_)).WillByDefault(Return(PVR2D_OK));
 
-    ON_CALL(*this, MemWrap(_, _, _, _, _, _)).WillByDefault(
-                DoAll(SetArgPointee<5>(reinterpret_cast<PVR2DMEMINFO*>(0xdaafdaaf)),
-                      Return(PVR2D_OK)));
+    ON_CALL(*this, MemWrap(_, _, _, _, _, _)).WillByDefault(Invoke(fake, &FakePVR2D::MemWrap));
 
-    ON_CALL(*this, MemFree(_, _)).WillByDefault(Return(PVR2D_OK));
+    ON_CALL(*this, MemFree(_, _)).WillByDefault(Invoke(fake, &FakePVR2D::MemFree));
+
+    fake = new FakePVR2D();
 }
 
 MockPVR2D::~MockPVR2D()

@@ -9,7 +9,7 @@ class FakeContext {};
 class PVR2DBuffer : public WSEGL::Buffer {
 public:
     PVR2DBuffer() : WSEGL::Buffer(new FakeContext) {
-        init(20, 30, 24, WSEGL_PIXELFORMAT_4444, nullptr);
+        init(20, 30, 32, WSEGL_PIXELFORMAT_ARGB8888, nullptr);
     }
 
     WSEGLPixelFormat convertWaylandFormatToWSEGLFormat(wl_kms_format format) {
@@ -53,4 +53,8 @@ TEST_F(WSEGLBuffer, throw_exception_if_no_supported_format) {
 
 TEST_F(WSEGLBuffer, bytes_per_pixel_for_format) {
     EXPECT_EQ(4, buffer.getSizeOfPixel(WSEGL_PIXELFORMAT_ARGB8888));
+}
+
+TEST_F(WSEGLBuffer, memory_info_contains_correct_size) {
+    EXPECT_EQ(32 * 30 * 4, buffer.getMemInfo()->ui32MemSize);
 }

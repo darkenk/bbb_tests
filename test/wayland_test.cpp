@@ -81,18 +81,18 @@ public:
         server.start("test_socket");
         display = wl_display_connect("test_socket");
         eglWindow = new wl_egl_window;
-        memset(eglWindow, sizeof(*eglWindow), 0);
+        memset(eglWindow, 0, sizeof(*eglWindow));
         eglWindow->height = 12;
         eglWindow->width = 12;
-        wd = new WaylandDisplay(display);
-        buffer = new WSWaylandBuffer(wd, eglWindow);
-        window = new WSWaylandWindow(wd, reinterpret_cast<NativeWindowType>(eglWindow));
+        waylandDisplay = new WaylandDisplay(display);
+        buffer = new WaylandBuffer(waylandDisplay, eglWindow);
+        window = new WaylandWindow(waylandDisplay, reinterpret_cast<NativeWindowType>(eglWindow));
     }
 
     virtual void TearDown() {
         delete window;
         delete buffer;
-        delete wd;
+        delete waylandDisplay;
         delete eglWindow;
         wl_display_disconnect(display);
         server.waitForFinish();
@@ -105,20 +105,20 @@ protected:
     FakeWaylandServer server;
     wl_display* display;
     wl_egl_window* eglWindow;
-    WaylandDisplay* wd;
-    WSWaylandBuffer* buffer;
-    WSWaylandWindow* window;
+    WaylandDisplay* waylandDisplay;
+    WaylandBuffer* buffer;
+    WaylandWindow* window;
 };
 
 TEST_F(WaylandFixture, is_it_compile) {
 }
 
 TEST_F(WaylandFixture, wl_kms_interface_created) {
-    EXPECT_NE(nullptr, wd->getKmsInterface());
+    EXPECT_NE(nullptr, waylandDisplay->getKmsInterface());
 }
 
 TEST_F(WaylandFixture, kms_driver_created) {
-    EXPECT_NE(nullptr, wd->getKmsDriver());
+    EXPECT_NE(nullptr, waylandDisplay->getKmsDriver());
 }
 
 TEST_F(WaylandFixture, buffer_has_stride_rounded_to_power_of_2) {
@@ -127,4 +127,10 @@ TEST_F(WaylandFixture, buffer_has_stride_rounded_to_power_of_2) {
 
 TEST_F(WaylandFixture, window_contains_front_buffer_with_correct_size) {
     EXPECT_EQ(12, window->getFrontBuffer()->getWidth());
+}
+
+TEST_F(WaylandFixture, create_wayland_window_from_display) {
+    auto w = waylandDisplay->createWindow(eglWindow);
+    EXPECT_NE(nullptr, dynamic_cast<WaylandWindow*>(w));
+    delete w;
 }

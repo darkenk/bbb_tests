@@ -27,7 +27,7 @@ const struct wl_callback_listener WaylandDisplay::sSyncListener = {
      WaylandDisplay::syncCallback
 };
 
-const struct wl_callback_listener WSWaylandWindow::sThrottleListener = {
+const struct wl_callback_listener WaylandWindow::sThrottleListener = {
     .done = throttleCallback
 };
 
@@ -113,9 +113,56 @@ void WaylandDisplay::authenticated()
     kms_create(mDrmFd, &mKmsDriver);
 }
 
-void WSWaylandWindow::throttleCallback(void* data, wl_callback* callback, uint32_t)
+WaylandWindow::WaylandWindow(WaylandDisplay* display, NativeWindowType nativeWindow):
+    Drawable(display->getContext()), mBufferConsumedByCompositor(true)
 {
-    auto *w = reinterpret_cast<WSWaylandWindow*>(data);
+    auto w = reinterpret_cast<struct wl_egl_window*>(nativeWindow);
+    mSurface = w->surface;
+    for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
+        mBuffers[i] = new WaylandBuffer(display, w);
+    }
+    mDisplay = display;
+}
+
+void WaylandWindow::swapBuffers() {
+    if (!mBufferConsumedByCompositor) {
+        wl_display_roundtrip(mDisplay->getNative());
+    }
+    mBufferConsumedByCompositor = false;
+    auto c = wl_surface_frame(mSurface);
+    wl_callback_add_listener(c, &sThrottleListener, this);
+    auto b = (WaylandBuffer*)getFrontBuffer();
+    wl_surface_attach(mSurface, b->getWaylandBuffer(), 0, 0);
+    wl_surface_commit(mSurface);
+    WSEGL::Drawable::swapBuffers();
+}
+
+void WaylandWindow::throttleCallback(void* data, wl_callback* callback, uint32_t)
+{
+    auto *w = reinterpret_cast<WaylandWindow*>(data);
     w->mBufferConsumedByCompositor = true;
     wl_callback_destroy(callback);
+}
+
+WaylandBuffer::WaylandBuffer(WaylandDisplay* disp, wl_egl_window* nativeWindow):
+    Buffer(disp->getContext()) {
+    unsigned width = nativeWindow->width;
+    unsigned stride = upperPowerOfTwo(width);
+    unsigned height = nativeWindow->height;
+    unsigned handle = handle;
+    auto format = WL_KMS_FORMAT_ARGB8888;
+    mBuffer = createKmsBuffer(disp->getKmsDriver(), stride, height);
+
+    kms_bo_get_prop(mBuffer, KMS_PITCH, &stride);
+    kms_bo_get_prop(mBuffer, KMS_HANDLE, &handle);
+    stride /= getSizeOfPixel(convertWaylandFormatToPVR2DFormat(format));
+
+    void* out;
+    kms_bo_map(mBuffer, &out);
+    init(width, height, stride, convertWaylandFormatToPVR2DFormat(format), out);
+    kms_bo_unmap(mBuffer);
+    int prime;
+    drmPrimeHandleToFD(disp->getDrmFd(), handle, 0, &prime);
+    mWaylandBuffer = wl_kms_create_buffer(disp->getKmsInterface(), prime, width,
+                                          height, stride, format, 0);
 }

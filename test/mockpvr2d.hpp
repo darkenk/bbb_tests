@@ -4,6 +4,8 @@
 #include <gmock/gmock.h>
 #include <pvr2d/pvr2d.h>
 
+class FakePVR2D;
+
 class MockPVR2D
 {
 public:
@@ -17,6 +19,8 @@ public:
                                      PVR2D_ULONG[], PVR2DMEMINFO**));
     MOCK_METHOD2(MemFree, PVR2DERROR(PVR2DCONTEXTHANDLE, PVR2DMEMINFO*));
 
+private:
+    FakePVR2D* fake;
 };
 
 #endif // MOCKPVR2D_HPP

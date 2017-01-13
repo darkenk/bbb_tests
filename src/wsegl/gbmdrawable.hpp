@@ -10,6 +10,7 @@
 #include "xf86drm.h"
 #include <unistd.h>
 #include <dk_utils/logger.hpp>
+#include <gbm/gbm_kmsint.h>
 
 struct wl_kms {
     struct wl_display *display;
@@ -18,6 +19,8 @@ struct wl_kms {
 
     struct kms_auth *auth; /* for nested authentication */
 };
+
+namespace WSEGL {
 
 class GbmPixmapBuffer : public WSEGL::Buffer
 {
@@ -36,7 +39,7 @@ public:
         init(kmsBuffer->width, kmsBuffer->height, kmsBuffer->stride, format, mAddr);
     }
 
-    virtual ~GbmPixmapBuffer() {
+    virtual ~GbmPixmapBuffer() override {
         munmap(mAddr, mSize);
     }
 
@@ -55,10 +58,64 @@ public:
         mBuffers[0] = mBuffers[1] = new GbmPixmapBuffer(ctx, kmsBuffer);
     }
 
-    virtual ~GbmPixmapDrawable() {
+    virtual ~GbmPixmapDrawable() override {
         delete mBuffers[0];
     }
 
 };
+
+class GBMBuffer : public WSEGL::Buffer
+{
+public:
+    GBMBuffer(PVR2DCONTEXTHANDLE ctx, gbm_kms_bo* buffer): Buffer(ctx) {
+        void* out;
+        kms_bo_map(buffer->bo, &out);
+        auto format = WSEGL_PIXELFORMAT_ARGB8888;
+        auto stride = buffer->base.stride / getSizeOfPixel(format);
+        init(buffer->base.width, buffer->base.height, stride, format, out);
+        kms_bo_unmap(buffer->bo);
+    }
+
+};
+
+class GBMWindow : public WSEGL::Drawable
+{
+public:
+    GBMWindow(PVR2DCONTEXTHANDLE ctx, NativeWindowType window):
+        Drawable(ctx), mSurface(reinterpret_cast<struct gbm_kms_surface*>(window)) {
+        for (unsigned int i = 0; i < BUFFER_COUNT; i++) {
+            mBuffers[i] = new GBMBuffer(ctx, mSurface->bo[i]);
+        }
+        mSurface->front = 0;
+    }
+    virtual ~GBMWindow() override {
+        for (auto b : mBuffers) {
+            delete b;
+        }
+    }
+
+    static GBMWindow* getFromWSEGL(WSEGLDrawableHandle handle) {
+        return reinterpret_cast<GBMWindow*>(handle);
+    }
+
+    void swapBuffers() override {
+        WSEGL::Drawable::swapBuffers();
+        mSurface->front = getIndex();
+    }
+
+private:
+    struct gbm_kms_surface* mSurface;
+};
+
+class GBMDisplay : public Display
+{
+public:
+    Drawable* createWindow(NativeWindowType window) override {
+        return new GBMWindow(getContext(), window);
+    }
+
+};
+
+}
 
 #endif // GBMDRAWABLE_HPP
