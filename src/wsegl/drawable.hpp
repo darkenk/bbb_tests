@@ -136,7 +136,7 @@ public:
         }
 
         mConfigs[0].ui32DrawableType = WSEGL_DRAWABLE_WINDOW;
-        mConfigs[0].ePixelFormat = WSEGL_PIXELFORMAT_8888;
+        mConfigs[0].ePixelFormat = WSEGL_PIXELFORMAT_XRGB8888;
         mConfigs[0].ulNativeRenderable = WSEGL_FALSE;
         mConfigs[0].ulFrameBufferLevel = 0;
         mConfigs[0].ulNativeVisualID = 0;
@@ -144,6 +144,28 @@ public:
         mConfigs[0].eTransparentType = WSEGL_OPAQUE;
         mConfigs[0].ulTransparentColor = 0;
         mConfigs[0].ulFramebufferTarget = WSEGL_TRUE;
+
+        mConfigs[1].ui32DrawableType = WSEGL_DRAWABLE_WINDOW;
+        mConfigs[1].ePixelFormat = WSEGL_PIXELFORMAT_XRGB8888;
+        mConfigs[1].ulNativeRenderable = WSEGL_FALSE;
+        mConfigs[1].ulFrameBufferLevel = 0;
+        mConfigs[1].ulNativeVisualID = WL_KMS_FORMAT_XRGB8888;
+        mConfigs[1].ulNativeVisualType = 0;
+        mConfigs[1].eTransparentType = WSEGL_OPAQUE;
+        mConfigs[1].ulTransparentColor = 0;
+        mConfigs[1].ulFramebufferTarget = WSEGL_TRUE;
+
+        mConfigs[2].ui32DrawableType = WSEGL_DRAWABLE_WINDOW;
+        mConfigs[2].ePixelFormat = WSEGL_PIXELFORMAT_ARGB8888;
+        mConfigs[2].ulNativeRenderable = WSEGL_FALSE;
+        mConfigs[2].ulFrameBufferLevel = 0;
+        mConfigs[2].ulNativeVisualID = WL_KMS_FORMAT_ARGB8888;
+        mConfigs[2].ulNativeVisualType = 0;
+        mConfigs[2].eTransparentType = WSEGL_OPAQUE;
+        mConfigs[2].ulTransparentColor = 0;
+        mConfigs[2].ulFramebufferTarget = WSEGL_TRUE;
+
+        mConfigs[3].ui32DrawableType = WSEGL_NO_DRAWABLE;
     }
 
     virtual ~Display() {
@@ -165,7 +187,7 @@ public:
 
 private:
     PVR2DCONTEXTHANDLE mContext;
-    WSEGLConfig mConfigs[1];
+    WSEGLConfig mConfigs[4];
 };
 
 }

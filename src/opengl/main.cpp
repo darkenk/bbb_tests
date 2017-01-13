@@ -61,10 +61,38 @@ int main()
     auto surface = gbm_surface_create(gbmDevice, 800, 480, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT |
                                       GBM_BO_USE_RENDERING);
     assert(surface);
-    //EGLWrapper w((EGLNativeDisplayType)gbmDevice, (EGLNativeWindowType)surface);
+//    EGLWrapper w((EGLNativeDisplayType)gbmDevice, (EGLNativeWindowType)surface);
+    auto d = eglGetDisplay(gbmDevice);
+    eglInitialize(d, nullptr, nullptr);
+//    EGLint configAttribs[] = {EGL_NONE};
+//    EGLint configAttribs[] = {0x3033, 0x4, 0x3024, 0x1, 0x3023, 0x1, 0x3022, 0x1, 0x3021, 0x0, 0x3040, 0x4, 0x3038};
+    EGLint configAttribs[] = {
+    EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+    EGL_RED_SIZE, 1,
+    EGL_GREEN_SIZE, 1,
+    EGL_BLUE_SIZE, 1,
+    EGL_ALPHA_SIZE, 1,
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+    EGL_NONE};
+
+    EGLConfig config[10];
+    int numConfigs = 0;
+    auto ret = eglChooseConfig(d, configAttribs, config, 10, &numConfigs);
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    //w.swap();
+//    w.swap();
+
+    LOGVD("no_of_configs %d, ret %d", numConfigs, ret);
+    for (int i =0; i < numConfigs; i++) {
+        EGLint id;
+        LOGVD("conf[%d]", i);
+        if(eglGetConfigAttrib(d, config[i], EGL_NATIVE_VISUAL_ID, &id)) {
+            LOGVD("native_visual_id 0x%x", id);
+        }
+        if (eglGetConfigAttrib(d, config[i], EGL_BUFFER_SIZE, &id)) {
+            LOGVD("Buffer size %d ", id);
+        }
+    }
 
     Resources r(fd);
     auto c = r.getDefaultConnector();
