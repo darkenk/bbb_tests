@@ -146,9 +146,9 @@ void WaylandWindow::throttleCallback(void* data, wl_callback* callback, uint32_t
 
 WaylandBuffer::WaylandBuffer(WaylandDisplay* disp, wl_egl_window* nativeWindow):
     Buffer(disp->getContext()) {
-    unsigned width = nativeWindow->width;
+    int width = nativeWindow->width;
     unsigned stride = upperPowerOfTwo(width);
-    unsigned height = nativeWindow->height;
+    int height = nativeWindow->height;
     unsigned handle = handle;
     auto format = WL_KMS_FORMAT_ARGB8888;
     mBuffer = createKmsBuffer(disp->getKmsDriver(), stride, height);

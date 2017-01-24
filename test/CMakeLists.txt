@@ -1,5 +1,13 @@
+find_package(GTest REQUIRED)
+
 find_package(Wayland COMPONENTS Egl Client Server)
 find_package(DRM)
+
+include_directories(
+    ${DK_UTILS_INCLUDE_DIRS}
+    SYSTEM ${GTEST_INCLUDE_DIRS}
+    SYSTEM ${GMOCK_INCLUDE_DIRS}
+)
 
 set(SRC "${CMAKE_CURRENT_SOURCE_DIR}/../src/wsegl")
 set(INC "inc/;inc/libkms;${SRC};${SRC}/sgx_include;${Wayland_INCLUDE_DIRS};${KMS_INCLUDE_DIRS};${DRM_INCLUDE_DIRS}")
