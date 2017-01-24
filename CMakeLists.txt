@@ -9,11 +9,10 @@ endif()
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH
     ${CMAKE_MODULE_PATH}
-    ${CMAKE_SOURCE_DIR}/cmake
     ${ECM_FIND_MODULE_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/cmake/modules
 )
-set(ENABLE_ CACHE BOOL "Disable dk_utils tests" FORCE)
-set(ENABLE_TESTS OFF CACHE BOOL "Disable dk_utils tests" FORCE)
+
 add_definitions(-std=c++11)
 find_package(dk_utils REQUIRED)
 
