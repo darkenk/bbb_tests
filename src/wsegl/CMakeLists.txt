@@ -10,7 +10,6 @@ find_package(Wayland COMPONENTS Egl Client)
 include_directories(SYSTEM
     ./sgx_include
     ${GBM_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../thayama/libgbm
     ${KMS_INCLUDE_DIRS}/libkms
     ${DK_UTILS_INCLUDE_DIRS}
     ${Wayland_INCLUDE_DIRS}

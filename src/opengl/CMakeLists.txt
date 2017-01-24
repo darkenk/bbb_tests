@@ -26,12 +26,7 @@ add_executable(${PROJECT_NAME} main.cpp)
 
 target_link_libraries(${PROJECT_NAME}
     ${GBM_LIBRARIES}
-    ${UDEV_LIBRARIES}
-    ${DRM_LIBRARIES}
-    ${KMS_LIBRARIES}
-    dk_utils
     drm_wrapper
-    ${CMAKE_DL_LIBS}
     ${EGL_LIBRARIES}
     ${GLESv2_LIBRARIES}
 )
