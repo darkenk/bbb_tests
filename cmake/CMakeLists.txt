@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.5)
+set(dk_utils_DIR ${CMAKE_CURRENT_LIST_DIR}/dk_utils)
+add_subdirectory(dk_utils)
+add_subdirectory(bbb_tests)
+add_subdirectory(libegl)
+#add_subdirectory(libgbm)
